@@ -29,7 +29,7 @@ def process_table_line(line, in_table):
     elif line.startswith("|"):
         cells = line.split("|")
         translated_cells = [f"| <translate>{cell.strip()}</translate>" for cell in cells if cell.strip()]
-        return " ".join(translated_cells)  # Join cells back with '|'
+        return "|".join(translated_cells)  # Join cells back with '|'
     return line
 
 def convert_to_translatable_wikitext(wikitext):
