@@ -1,0 +1,40 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+ENV/
+env/
+
+# Flask instance folder
+instance/
+
+# Logs
+*.log
+
+# SQLite database
+*.sqlite3
+*.db
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Miscellaneous
+*.DS_Store
+*.coverage
+*.tox
+*.nox
+*.coverage
+*.egg-info/
+*.eggs/
+*.mypy_cache/
+*.pylint.d/
+*.pydist/
+*.pytest_cache/
