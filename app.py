@@ -36,7 +36,7 @@ def add_translate_tags(text):
 
     translated_words = []
     for word in words:
-        if special_char_pattern.match(word) or hiero_pattern.search(word) or sub_pattern.search(word) or sup_pattern.search(word):
+        if attribute_pattern.search(word) or special_char_pattern.match(word) or hiero_pattern.search(word) or sub_pattern.search(word) or sup_pattern.search(word):
             # If word is a special character, hiero, subscript, or superscript, do not wrap it in <translate> tags
             translated_words.append(word)
         else:
