@@ -13,15 +13,55 @@ table_cell_separator_pattern = re.compile(r"(\|\||\||\*)")
 header_pattern = re.compile(r"^(=+)(.*?)(=+)$")
 # Regex to detect table header cell separators (! and !!)
 header_cell_separator_pattern = re.compile(r"(!{1,2})")
+# Regex to detect HTML entities (special characters)
+special_char_pattern = re.compile(r"&\w+;")
+# Regex for hiero, sub, sup, and math tags
+hiero_pattern = re.compile(r'(<hiero>.*?</hiero>)')
+sub_pattern = re.compile(r'(<sub>.*?</sub>|&#832[0-9];)')
+sup_pattern = re.compile(r'(<sup>.*?</sup>|&#830[0-9];|&sup[0-9];)')
+math_tag_pattern = re.compile(r'(<math>.*?</math>)')
+math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
 
 def add_translate_tags(text):
     """
-    Wraps the text in <translate> tags if it doesn't already have them
-    and if it is not an attribute like rowspan=11.
+    Wraps the text in <translate> tags if it doesn't already have them,
+    ensuring that special characters (e.g., &igrave;) and certain tags
+    (e.g., hiero, sub, sup, math) are not wrapped in <translate> tags.
     """
     if not text.strip():
         return text
-    return f'<translate>{text.strip()}</translate>'
+
+    # Split text by spaces to handle potential mix of text and special characters
+    words = text.split()
+
+    translated_words = []
+    for word in words:
+        if special_char_pattern.match(word) or hiero_pattern.search(word) or sub_pattern.search(word) or sup_pattern.search(word):
+            # If word is a special character, hiero, subscript, or superscript, do not wrap it in <translate> tags
+            translated_words.append(word)
+        else:
+            # Otherwise, wrap it in <translate> tags
+            translated_words.append(f'<translate>{word}</translate>')
+
+    return " ".join(translated_words)
+def process_math(line):
+    """
+    Processes math-related tags ({{math}}, <math>, etc.) and ensures their content is not wrapped in <translate> tags.
+    """
+    # Generalized regex for math-related tags
+    math_patterns = [
+        re.compile(r'(\{\{math\|.*?\}\})', re.DOTALL),  # For {{math}} templates
+        re.compile(r'(<math.*?>.*?</math>)', re.DOTALL)   # For <math> tags with attributes and content
+    ]
+
+    for pattern in math_patterns:
+        match = pattern.search(line)
+        if match:
+            math_content = match.group(0)
+            return line.replace(math_content, math_content)  # Return math-related content as is
+
+    return line
+
 
 def process_table_line(line):
     """
@@ -243,18 +283,18 @@ def process_poem_tag(line, in_poem_block=False):
         opening_tag = opening_poem_pattern.search(line).group(1)  # Extract the opening <poem> tag
         start_idx = line.find(opening_tag) + len(opening_tag)
         poem_content = line[start_idx:].strip()  # Get the content after the opening tag
-
         # If there's a closing tag within the same line
         if closing_poem_pattern.search(line):
             closing_tag = closing_poem_pattern.search(line).group(1)  # Extract the closing </poem> tag
             end_idx = line.find(closing_tag)
+
             poem_content = line[start_idx:end_idx].strip()  # Get content between <poem> and </poem>
 
             # Process the poem content by adding <translate> tags
             translated_poem_content = convert_to_translatable_wikitext(poem_content)
 
             # Return the fully processed line
-            return f'{opening_tag}{translated_poem_content}{closing_tag}', False
+            return f'{opening_tag}{translated_poem_content}{closing_tag}{convert_to_translatable_wikitext(line[end_idx+len(closing_tag):])}', False
 
         else:
             # If only the opening <poem> tag is present, we are in the middle of a poem block
@@ -283,7 +323,162 @@ def process_poem_tag(line, in_poem_block=False):
 
     # Case 4: No <poem> tag found, return the line as is
     return line, in_poem_block
+def process_small_tag(line, in_poem_block=False):
+    """
+    Detects <poem> and </poem> tags and processes the text content inside the poem
+    by wrapping it in <translate> tags. Handles cases where only one of the tags is present.
+    
+    :param line: The line of text to process.
+    :param in_poem_block: A flag to indicate if we are already inside a <poem> block.
+    :return: Processed line, and updated in_poem_block flag.
+    """
+    opening_poem_pattern = re.compile(r'(<small[^>]*>)', re.IGNORECASE)
+    closing_poem_pattern = re.compile(r'(</small>)', re.IGNORECASE)
+    # Case 1: Detect an opening <poem> tag (without necessarily having a closing tag)
+    if opening_poem_pattern.search(line) and not in_poem_block:
+        opening_tag = opening_poem_pattern.search(line).group(1)  # Extract the opening <poem> tag
+        start_idx = line.find(opening_tag) + len(opening_tag)
+        poem_content = line[start_idx:].strip()  # Get the content after the opening tag
 
+        # If there's a closing tag within the same line
+        if closing_poem_pattern.search(line):
+            closing_tag = closing_poem_pattern.search(line).group(1)  # Extract the closing </poem> tag
+            end_idx = line.find(closing_tag)
+            poem_content = line[start_idx:end_idx].strip()  # Get content between <poem> and </poem>
+
+            # Process the poem content by adding <translate> tags
+            translated_poem_content = convert_to_translatable_wikitext(poem_content)
+
+            # Return the fully processed line
+            return f'{opening_tag}{translated_poem_content}{closing_tag}{convert_to_translatable_wikitext(line[end_idx+len("</small>"):])}', False
+
+        else:
+            # If only the opening <poem> tag is present, we are in the middle of a poem block
+            translated_poem_content = convert_to_translatable_wikitext(poem_content)
+            return f'{opening_tag}{translated_poem_content}', True
+
+    # Case 2: Detect a closing </poem> tag without an opening tag in the same line
+    elif closing_poem_pattern.search(line) and not in_poem_block:
+
+        closing_tag = closing_poem_pattern.search(line).group(1)  # Extract the closing </poem> tag
+        poem_content = line[:line.find(closing_tag)].strip()  # Get content before the closing tag
+        after_poem= line[line.find(closing_tag)+len(closing_tag):].strip()
+        # Process the poem content by adding <translate> tags
+        translated_poem_content = convert_to_translatable_wikitext(poem_content)
+        # print(after_poem)
+        translated_after_poem = convert_to_translatable_wikitext(after_poem)
+        # Return the processed line with the closing </poem> tag
+        return f'{translated_poem_content}{closing_tag}{after_poem}', False
+
+    # Case 3: We are inside a <poem> block and no closing tag is found in this line
+    elif in_poem_block:
+        translated_poem_content = convert_to_translatable_wikitext(line.strip())
+        return f'{translated_poem_content}', True
+
+    # Case 4: No <poem> tag found, return the line as is
+    return line, in_poem_block
+# def process_big_tag(line, in_poem_block=False):
+#     """
+#     Detects <poem> and </poem> tags and processes the text content inside the poem
+#     by wrapping it in <translate> tags. Handles cases where only one of the tags is present.
+    
+#     :param line: The line of text to process.
+#     :param in_poem_block: A flag to indicate if we are already inside a <poem> block.
+#     :return: Processed line, and updated in_poem_block flag.
+#     """
+#     opening_poem_pattern = re.compile(r'(<big[^>]*>)', re.IGNORECASE)
+#     closing_poem_pattern = re.compile(r'(</big>)', re.IGNORECASE)
+#     # Case 1: Detect an opening <poem> tag (without necessarily having a closing tag)
+#     if opening_poem_pattern.search(line) and not in_poem_block:
+#         opening_tag = opening_poem_pattern.search(line).group(1)  # Extract the opening <poem> tag
+#         start_idx = line.find(opening_tag) + len(opening_tag)
+#         print(line[:start_idx])
+#         poem_content = line[start_idx:].strip()  # Get the content after the opening tag
+#         # If there's a closing tag within the same line
+#         if closing_poem_pattern.search(line):
+#             closing_tag = closing_poem_pattern.search(line).group(1)  # Extract the closing </poem> tag
+#             end_idx = line.find(closing_tag)
+#             poem_content = line[start_idx:end_idx].strip()  # Get content between <poem> and </poem>
+
+#             # Process the poem content by adding <translate> tags
+#             translated_poem_content = convert_to_translatable_wikitext(poem_content)
+#             # Return the fully processed line
+#             return f'{convert_to_translatable_wikitext(line[:start_idx])}{opening_tag}{translated_poem_content}{closing_tag}{convert_to_translatable_wikitext(line[end_idx+len("</big>"):])}', False
+
+#         else:
+#             # If only the opening <poem> tag is present, we are in the middle of a poem block
+#             translated_poem_content = convert_to_translatable_wikitext(poem_content)
+#             return f'{opening_tag}{translated_poem_content}', True
+
+#     # Case 2: Detect a closing </poem> tag without an opening tag in the same line
+#     elif closing_poem_pattern.search(line) and not in_poem_block:
+
+#         closing_tag = closing_poem_pattern.search(line).group(1)  # Extract the closing </poem> tag
+#         poem_content = line[:line.find(closing_tag)].strip()  # Get content before the closing tag
+#         print(line.find(closing_tag))
+#         after_poem= line[line.find(closing_tag)+len(closing_tag):].strip()
+#         # Process the poem content by adding <translate> tags
+#         translated_poem_content = convert_to_translatable_wikitext(poem_content)
+#         # print(after_poem)
+#         translated_after_poem = convert_to_translatable_wikitext(after_poem)
+#         # Return the processed line with the closing </poem> tag
+#         return f'{translated_poem_content}{closing_tag}{after_poem}', False
+
+#     # Case 3: We are inside a <poem> block and no closing tag is found in this line
+#     elif in_poem_block:
+#         translated_poem_content = convert_to_translatable_wikitext(line.strip())
+#         return f'{translated_poem_content}', True
+
+#     # Case 4: No <poem> tag found, return the line as is
+#     return line, in_poem_block
+def process_code_tag(line):
+    """
+    Processes <code> and </code> tags and ensures that the content inside the tags is not wrapped in <translate> tags.
+    """
+    if "<code" in line and "</code>" in line:
+        before_code = line.split("<code>")[0].strip()
+        code_content = line.split("<code>")[1].split("</code>")[0]
+        after_code = line.split("</code>")[1].strip()
+
+        translated_before = convert_to_translatable_wikitext(before_code) if before_code else ''
+        translated_after = convert_to_translatable_wikitext(after_code) if after_code else ''
+
+        return f'{translated_before}<code>{code_content}</code>{translated_after}'
+    elif "<code>" in line:
+        before_code = line.split("<code")[0].strip()
+        code_content = line.split("<code")[1].strip()
+        translated_before = convert_to_translatable_wikitext(before_code) if before_code else ''
+        return f'{translated_before}<code>{code_content}'
+    elif "</code>" in line:
+        code_content = line.split("</code>")[0].strip()
+        after_code = line.split("</code>")[1].strip()
+        translated_after = convert_to_translatable_wikitext(after_code) if after_code else ''
+        return f'{code_content}</code>{translated_after}'
+    else:
+        return line
+def process_syntax_highlights(line):
+    """
+    Processes <syntaxhighlight> and </syntaxhighlight> tags and ensures that the content inside the tags is not wrapped in <translate> tags.
+    """
+    if "<syntaxhighlight" in line and "</syntaxhighlight>" in line:
+        before_syntax = line.split("<syntaxhighlight>")[0].strip()
+        syntax_content = line.split("<syntaxhighlight>")[1].split("</syntaxhighlight>")[0]
+        after_syntax = line.split("</syntaxhighlight>")[1].strip()
+
+        translated_before = convert_to_translatable_wikitext(before_syntax) if before_syntax else ''
+        return f'{translated_before}<syntaxhighlight>{syntax_content}</syntaxhighlight>{after_syntax}'
+    elif "<syntaxhighlight>" in line:
+        before_syntax = line.split("<syntaxhighlight")[0].strip()
+        syntax_content = line.split("<syntaxhighlight>")[1].strip()
+        translated_before = convert_to_translatable_wikitext(before_syntax) if before_syntax else ''
+        return f'{translated_before}<syntaxhighlight>{syntax_content}'
+    elif "</syntaxhighlight>" in line:
+        syntax_content = line.split("</syntaxhighlight>")[0].strip()
+        after_syntax = line.split("</syntaxhighlight>")[1].strip()
+        translated_after = convert_to_translatable_wikitext(after_syntax) if after_syntax else ''
+        return f'{syntax_content}</syntaxhighlight>{translated_after}'
+    else:
+        return line
 def convert_to_translatable_wikitext(wikitext):
     if wikitext == "":
         return ""
@@ -293,13 +488,35 @@ def convert_to_translatable_wikitext(wikitext):
     """
     lines = wikitext.split('\n')
     converted_lines = []
-
+    in_syntax_highlight = False
     in_table = False
     for line in lines:
         line = line.strip()
-
+        
         if line:
-            if line.startswith("{|"):
+            if "<syntaxhighlight" in line:
+                # Start of a syntax highlight block
+                in_syntax_highlight = True
+                opening_tag_idx = line.index("<syntaxhighlight")
+                # Process content before the opening tag
+                converted_lines.append(convert_to_translatable_wikitext(line[:opening_tag_idx]))
+                
+                # Append the syntaxhighlight block as it is
+                converted_lines.append(line[opening_tag_idx:])
+            elif "</syntaxhighlight>" in line:
+                # End of a syntax highlight block
+                closing_tag_idx = line.index("</syntaxhighlight>")
+                
+                # Process content before the closing tag
+                converted_lines.append(line[:closing_tag_idx])
+                
+                # Append the closing syntaxhighlight tag
+                converted_lines.append(line[closing_tag_idx:])
+                in_syntax_highlight = False  # Exiting syntax highlight mode
+            elif in_syntax_highlight:
+                # Inside a syntaxhighlight block, do not process the line
+                converted_lines.append(line)
+            elif line.startswith("{|"):
                 in_table = True
                 converted_lines.append(line)
             elif line.startswith("|}") and in_table:
@@ -325,8 +542,21 @@ def convert_to_translatable_wikitext(wikitext):
                 converted_lines.append(process_blockquote(line))
             elif "<poem" in line or "</poem>" in line:
                 converted_lines.append(process_poem_tag(line)[0])
+            elif "<code" in line or "</code>" in line:
+                converted_lines.append(process_code_tag(line))
             elif '<div' in line:
                 converted_lines.append(process_div(line))  # Handle any <div> tag
+            elif '</div>' in line:
+                converted_lines.append(line)
+            elif "<hiero>" in line or "</hiero>" in line:
+                converted_lines.append(line)  # Do not add translate tags inside <hiero> tag
+            elif sub_pattern.search(line) or sup_pattern.search(line):
+                converted_lines.append(line)  # Do not add translate tags inside <sub>/<sup>
+            elif "<math>" in line or "{{math}}" in line:
+                converted_lines.append(process_math(line))  # Handle math tags
+            elif "<small>" in line or "</small>" in line:
+        # If the line contains <small> tags, we won't wrap them.
+                converted_lines.append(process_small_tag(line)[0])
             else:
                 converted_lines.append(add_translate_tags(line))
         else:
