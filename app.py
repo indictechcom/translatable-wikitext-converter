@@ -19,11 +19,9 @@ def add_translate_tags(text):
     Wraps the text in <translate> tags if it doesn't already have them
     and if it is not an attribute like rowspan=11.
     """
-    if attribute_pattern.search(text):
+    if not text.strip():
         return text
-    if not translate_tag_pattern.search(text) and text.strip():
-        return f'<translate>{text.strip()}</translate>'
-    return text
+    return f'<translate>{text.strip()}</translate>'
 
 def process_table_line(line):
     """
@@ -53,20 +51,35 @@ def process_table_line(line):
         cells = table_cell_separator_pattern.split(line)
         translated_cells = []
         for cell in cells:
-            # print("ok"+cell+" ")
-            if cell in ['|', '||','*']:  # Leave separators as is
+            if cell in ['|', '||', '*']:  # Leave separators as is
                 translated_cells.append(cell)
             elif cell.startswith("{{"):
                 translated_cells.append(cell)
             elif cell.endswith("}}"):
                 translated_cells.append(add_translate_tags(cell[:-2])+"}}")
-    
-
-
             else:
-                # Add translate tags around the cell content
                 translated_cells.append(add_translate_tags(cell))
         return "".join(translated_cells)
+
+def process_div(line):
+    """
+    Processes any <div> tag and adds <translate> tags around the text content inside the div,
+    while keeping the div structure and attributes intact.
+    """
+    # Regex pattern to detect <div> tags
+    div_pattern = re.compile(r'(<div[^>]*>)(.*?)(</div>)', re.DOTALL)
+    match = div_pattern.search(line)
+
+    if match:
+        opening_div_tag = match.group(1)  # <div ... >
+        div_content = match.group(2)  # Text or content inside the div
+        closing_div_tag = match.group(3)  # </div>
+
+        # Wrap only the text content inside the div with <translate> tags
+        translated_content = add_translate_tags(div_content.strip())
+
+        return f'{opening_div_tag}{translated_content}{closing_div_tag}'
+    return line
 
 def process_header(line):
     """
@@ -88,110 +101,146 @@ def process_double_name_space(line):
     """
     pipestart = False
     returnline = ""
-    """
-        for file 
-    """
-    if line[2:6]=="File":
-        i=0
-        while i < (len(line)):
-            if(line[i]=='a' and line[i+1]=='l' and line[i+2]=='t' and line[i+3]=='='):
-                returnline+="alt=<translate>"
-                i+=4
-                while line[i]!='|' and line[i]!=']' :
-                    returnline+=line[i]
-                    i+=1
-                returnline+="</translate>"
-                returnline+=line[i]
+
+    # For File case
+    if line[2:6] == "File":
+        i = 0
+        while i < len(line):
+            if line[i:i+4] == 'alt=':
+                returnline += "alt=<translate>"
+                i += 4
+                while line[i] != '|' and line[i] != ']':
+                    returnline += line[i]
+                    i += 1
+                returnline += "</translate>"
+                returnline += line[i]
             else:
-                returnline+=line[i]
-            i+=1
-
+                returnline += line[i]
+            i += 1
         return returnline
-    
-    """
-    For normal pipe name spaces
-    """
 
-    line1= line[2:-2]
+    # For normal pipe name spaces
+    line1 = line[2:-2]
     words = line1.split("|")
 
-    # print(len(words))
-    if(len(words)>1):
-        returnline+="[["
-        returnline+=words[0]+"|"
-        words=words[1:]
+    if len(words) > 1:
+        returnline += "[["
+        returnline += words[0] + "|"
+        words = words[1:]
 
         for word in words:
-            if(word.strip()!=""):
-                returnline+="<translate>"
-                returnline+=word
-                returnline+="</translate>"
+            if word.strip() != "":
+                returnline += "<translate>"
+                returnline += word
+                returnline += "</translate>"
             else:
-                returnline+="|"
-        returnline+="]]"
+                returnline += "|"
+        returnline += "]]"
         return returnline
 
+    # For cases without pipe (just links)
     else:
         for i in range(len(line)):
-            if(line[i]=='|' and pipestart is False):
-                pipestart=True
-                returnline+="|<translate>"
-            
-            elif pipestart is True and (line[i]=='|' or line[i]==']' ):
-                pipestart=False
-                returnline+="</translate>"
-                returnline+=line[i]
-                if(line[i]=='|'):
-                    returnline+="<translate>"
-                    pipestart=True
-            
+            if line[i] == '|' and pipestart is False:
+                pipestart = True
+                returnline += "|<translate>"
+
+            elif pipestart is True and (line[i] == '|' or line[i] == ']'):
+                pipestart = False
+                returnline += "</translate>"
+                returnline += line[i]
+                if line[i] == '|':
+                    returnline += "<translate>"
+                    pipestart = True
             else:
-                returnline+=line[i]
+                returnline += line[i]
         return returnline
 
 def process_external_link(line):
     """
     External link (e.g., [http://example.com]) and adds <translate> tags around the header text.
     """
-    words=line.split()
-    for i,word in enumerate(words):
-        if(i==0):
+    words = line.split()
+    for i, word in enumerate(words):
+        if i == 0:
             continue
-        elif(']' in word):
-            if len(word[:-1])>0:
-                words[i]=f"<translate>{word[:-1]}</translate>]"
+        elif ']' in word:
+            if len(word[:-1]) > 0:
+                words[i] = f"<translate>{word[:-1]}</translate>]"
         else:
-            words[i]=f"<translate>{word}</translate>"
-    line=' '.join(words)
+            words[i] = f"<translate>{word}</translate>"
+    line = ' '.join(words)
     return line
+
 def process_lists(line):
+    """
+    Processes lists (e.g., *, #, :) by adding <translate> tags around list item content.
+    """
     for i in range(len(line)):
-        if line[i]=='*' or line[i]=='#' or line[i]==':' or line[i]==';':
+        if line[i] in ['*', '#', ':', ';']:
             continue
         else:
-            words=line[i:].split("<br>")
+            words = line[i:].split("<br>")
             for j in range(len(words)):
-                worder=words[j].split(":")
+                worder = words[j].split(":")
                 for k in range(len(worder)):
-                    if worder[k]=='':
+                    if worder[k] == '':
                         continue
                     else:
-                        worder[k]=f"<translate>{worder[k]}</translate>"
-                words[j]=":".join(worder)
-            newstring="<br>".join(words)
+                        worder[k] = f"<translate>{worder[k]}</translate>"
+                words[j] = ":".join(worder)
+            newstring = "<br>".join(words)
             return f"{line[:i]}{newstring}"
+
+def process_doublecurly(line):
+    """
+    Processes the text to ensure that only the content outside of double curly braces {{ ... }} is wrapped in <translate> tags,
+    while preserving the template content inside the braces without translating it.
+    """
+    if "{{" in line and "}}" in line:
+        start = line.index("{{")
+        end = line.index("}}") + 2  # Include the closing "}}"
+        inside_curly = line[start:end]
+        outside_curly = line[end:].strip()
+        return f"{inside_curly}<translate>{outside_curly}</translate>"
+    else:
+        return f"<translate>{line.strip()}</translate>"
+
+def process_blockquote(line):
+    """
+    Handles blockquote tags by ensuring content inside blockquote is not wrapped in <translate> tags.
+    """
+    if "<blockquote>" in line and "</blockquote>" in line:
+        before_blockquote = line.split("<blockquote>")[0].strip()
+        blockquote_content = line.split("<blockquote>")[1].split("</blockquote>")[0]
+        after_blockquote = line.split("</blockquote>")[1].strip()
+
+        translated_before = add_translate_tags(before_blockquote) if before_blockquote else ''
+        translated_after = add_translate_tags(after_blockquote) if after_blockquote else ''
+
+        return f'{translated_before}<blockquote>{blockquote_content}</blockquote>{translated_after}'
+    elif "<blockquote>" in line:
+        before_blockquote = line.split("<blockquote>")[0].strip()
+        blockquote_content = line.split("<blockquote>")[1].strip()
+        translated_before = add_translate_tags(before_blockquote) if before_blockquote else ''
+        return f'{translated_before}<blockquote>{blockquote_content}'
+    elif "</blockquote>" in line:
+        blockquote_content = line.split("</blockquote>")[0].strip()
+        after_blockquote = line.split("</blockquote>")[1].strip()
+        translated_after = add_translate_tags(after_blockquote) if after_blockquote else ''
+        return f'{blockquote_content}</blockquote>{translated_after}'
+    else:
+        return line
+
 def convert_to_translatable_wikitext(wikitext):
     """
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
-    Handles tables and preserves their structure.
+    Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
     lines = wikitext.split('\n')
     converted_lines = []
 
     in_table = False
-    in_space_name_single = False
-    in_space_name_double = False
-
 
     for line in lines:
         line = line.strip()
@@ -199,16 +248,16 @@ def convert_to_translatable_wikitext(wikitext):
         if line:
             if line.startswith("{|"):
                 in_table = True
-                converted_lines.append(line)  # Table start
+                converted_lines.append(line)
             elif line.startswith("|}") and in_table:
                 in_table = False
-                converted_lines.append(line)  # Table end
+                converted_lines.append(line)
             elif in_table:
                 converted_lines.append(process_table_line(line))
             elif header_pattern.match(line):
-                converted_lines.append(process_header(line))  # Process headers
+                converted_lines.append(process_header(line))
             elif line.startswith("http"):
-                converted_lines.append(line)  # the http link 
+                converted_lines.append(line)
             elif line.startswith("[["):
                 converted_lines.append(process_double_name_space(line))
             elif line.startswith("["):
@@ -217,9 +266,14 @@ def convert_to_translatable_wikitext(wikitext):
                 converted_lines.append(line)
             elif line.startswith("*") or line.startswith("#") or line.startswith(":") or line.startswith(";"):
                 converted_lines.append(process_lists(line))
+            elif line.startswith("{{"):
+                converted_lines.append(process_doublecurly(line))
+            elif "<blockquote>" in line or "</blockquote>" in line:
+                converted_lines.append(process_blockquote(line))
+            elif '<div' in line:
+                converted_lines.append(process_div(line))  # Handle any <div> tag
             else:
                 converted_lines.append(add_translate_tags(line))
-
         else:
             converted_lines.append('')
 
