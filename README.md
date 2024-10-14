@@ -76,3 +76,20 @@ We welcome contributions to enhance the Wiki Translate Tagger. If you have sugge
 This project is licensed under the [MIT License](LICENSE).
 
 
+## Requirements
+
+**Input Wikitext Example:**
+
+```wikitext
+This is a text with an [[internal link]] and an [https://openstreetmap.org external link].
+
+**Expected Output:**
+
+```<translate>This is a text with an [[<tvar name="1">Special:MyLanguage/internal link</tvar> internal link]] and an [<tvar name="2">https://openstreetmap.org</tvar> external link].</translate>
+```
+
+**Notes:**
+
+* Links Handling: The tool wraps internal links with <tvar> tags for better translation support, ensuring they are localized using Special:MyLanguage.
+* Template Removal: Templates and other non-translatable elements will be automatically cleaned up for a simpler translation process.
+
