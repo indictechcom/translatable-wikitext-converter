@@ -4,7 +4,8 @@ import re
 app = Flask(__name__)
 
 # Regex to check if a line already has <translate> tags
-translate_tag_pattern = re.compile(r"<translate>.*</translate>")
+# Updated regex to detect any presence of <translate> tags (including comments and spaces)
+translate_tag_pattern = re.compile(r"<translate\b[^>]*>.*?</translate>", re.DOTALL)
 # Regex to match attributes like rowspan, colspan, etc.
 attribute_pattern = re.compile(r"\b\w+=[^\s\|]+")
 # Regex to detect table cell separators (| and ||)
@@ -21,29 +22,35 @@ sub_pattern = re.compile(r'(<sub>.*?</sub>|&#832[0-9];)')
 sup_pattern = re.compile(r'(<sup>.*?</sup>|&#830[0-9];|&sup[0-9];)')
 math_tag_pattern = re.compile(r'(<math>.*?</math>)')
 math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
+time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
 
 def add_translate_tags(text):
     """
-    Wraps the text in <translate> tags if it doesn't already have them,
-    ensuring that special characters (e.g., &igrave;) and certain tags
-    (e.g., hiero, sub, sup, math) are not wrapped in <translate> tags.
+    Wraps the entire text in <translate> tags if it doesn't already have them,
+    ensuring that special characters (e.g., &igrave;), time values (e.g., 9:30AM),
+    and certain tags (e.g., hiero, sub, sup, math) are not wrapped in <translate> tags.
+    Skips adding <translate> tags if they are already present, even with comments or special content.
     """
     if not text.strip():
         return text
 
-    # Split text by spaces to handle potential mix of text and special characters
-    words = text.split()
+    # If the text already has <translate> tags (including comments), do not add them
+    if translate_tag_pattern.search(text):
+        return text
 
-    translated_words = []
-    for word in words:
-        if attribute_pattern.search(word) or special_char_pattern.match(word) or hiero_pattern.search(word) or sub_pattern.search(word) or sup_pattern.search(word):
-            # If word is a special character, hiero, subscript, or superscript, do not wrap it in <translate> tags
-            translated_words.append(word)
-        else:
-            # Otherwise, wrap it in <translate> tags
-            translated_words.append(f'<translate>{word}</translate>')
+    # If the text has any special characters, time values, or certain tags, don't wrap it in <translate> tags
+    if (attribute_pattern.search(text) or special_char_pattern.match(text) or 
+        hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
+        time_pattern.match(text)):  # Skip time values
+        return text
+    
+    # Wrap the entire block of text in <translate> tags
+    return f'<translate>{text}</translate>'
 
-    return " ".join(translated_words)
+
+
+
+
 def process_math(line):
     """
     Processes math-related tags ({{math}}, <math>, etc.) and ensures their content is not wrapped in <translate> tags.
@@ -69,22 +76,20 @@ def process_table_line(line):
     ensuring that only the actual content of table cells is wrapped, not the separators.
     """
     if line.startswith("|+"):
-        if line[2:].strip() == "":
-            return line
         # For table caption
-        return f'{line[0:2]}<translate>{line[2:].strip()}</translate>'
+        return f'{line[:2]}{add_translate_tags(line[2:].strip())}'
     elif line.startswith("|-"):
         # Table row separator
         return line
     elif line.startswith("!"):
-        # For table headers, split on ! and !!
+        # For table headers, split on ! and !! without breaking words
         headers = header_cell_separator_pattern.split(line)
         translated_headers = []
         for header in headers:
             if header in ['!', '!!']:  # Preserve the ! and !! without adding translate tags
                 translated_headers.append(header)
             else:
-                translated_headers.append(add_translate_tags(header))
+                translated_headers.append(add_translate_tags(header.strip()))  # Don't split into words
         return "".join(translated_headers)
     else:
         # For table rows, ensure content is wrapped but separators are untouched
@@ -98,8 +103,9 @@ def process_table_line(line):
             elif cell.endswith("}}"):
                 translated_cells.append(add_translate_tags(cell[:-2])+"}}")
             else:
-                translated_cells.append(add_translate_tags(cell))
+                translated_cells.append(add_translate_tags(cell.strip()))  # Don't split into words
         return "".join(translated_cells)
+
 
 def process_div(line):
     """
@@ -122,18 +128,16 @@ def process_div(line):
     return line
 
 def process_header(line):
-    """
-    Processes headers (e.g., == Header ==) and adds <translate> tags around the header text.
-    """
     match = header_pattern.match(line)
     if match:
-        # Extract the equal signs and the header content
         opening_equals = match.group(1)
         header_text = match.group(2).strip()
         closing_equals = match.group(3)
-        # Wrap only the header text with <translate> tags, keep the equal signs intact
-        return f'{opening_equals} <translate>{header_text}</translate> {closing_equals}'
+        # Use add_translate_tags to avoid double wrapping
+        translated_header_text = add_translate_tags(header_text)
+        return f'{opening_equals} {translated_header_text} {closing_equals}'
     return line
+
 
 def process_double_name_space(line):
     """
@@ -198,13 +202,16 @@ def process_double_name_space(line):
 
 def process_external_link(line):
     """
-    External link (e.g., [http://example.com]) and adds <translate> tags around the header text.
+    Processes external links in the format [http://example.com Description] and ensures
+    that only the description part is wrapped in <translate> tags, leaving the URL untouched.
     """
-    words = line.split()
-    str=words[0]
-    words=words[1:]
-    words[-1] = words[-1][:-1]
-    return f"{str} <translate>{' '.join(words)}</translate>]"
+    match = re.match(r'(\[https?://[^\s]+)\s+([^\]]+)\]', line)
+    if match:
+        url_part = match.group(1)
+        description_part = match.group(2)
+        # Wrap only the description part in <translate> tags, leave the URL untouched
+        return f'{url_part} <translate>{description_part}</translate>]'
+    return line
 
 def process_lists(line):
     """
