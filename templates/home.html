@@ -30,6 +30,20 @@
             bottom: 0;
             width: 100%;
         }
+        @media only screen and (max-width: 900px) {
+            .d-flex {
+        justify-content: space-evenly !important;
+        align-items: center !important;
+        font-size: 0.95rem !important;
+        }}
+        @media only screen and (max-width: 330px) {
+            .d-flex {
+                flex-direction: column;
+            }
+            .mx-2 {
+            display: none;
+        }}
+}
     </style>
 </head>
 <body>
@@ -70,7 +84,7 @@
                 <span class="mx-2">|</span>
                 <p class="mb-0">More info: <a href="https://meta.wikimedia.org/wiki/Indic-TechCom">Indic-TechCom</a></p>
                 <span class="mx-2">|</span>
-                <p class="mb-0"><a href="https://github.com/indictechcom/translatable-wikitext-converter">View source</a></p>
+                <p class="mb-0">View Source: <a href="https://github.com/indictechcom/translatable-wikitext-converter">GitHub</a></p>
             </div>
         </footer>
     </div>
