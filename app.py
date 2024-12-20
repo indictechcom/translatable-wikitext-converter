@@ -7,7 +7,7 @@ app = Flask(__name__)
 # Updated regex to detect any presence of <translate> tags (including comments and spaces)
 translate_tag_pattern = re.compile(r"<translate\b[^>]*>.*?</translate>", re.DOTALL)
 # Regex to match attributes like rowspan, colspan, etc.
-attribute_pattern = re.compile(r"\b\w+=[^\s\|]+")
+attribute_pattern = re.compile(r"\b\w+(?!==)=([^\s|]+)")
 # Regex to detect table cell separators (| and ||)
 table_cell_separator_pattern = re.compile(r"(\|\||\||\*)")
 # Regex to detect headers in the format of == Header ==
@@ -23,6 +23,7 @@ sup_pattern = re.compile(r'(<sup>.*?</sup>|&#830[0-9];|&sup[0-9];)')
 math_tag_pattern = re.compile(r'(<math>.*?</math>)')
 math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
 time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
+
 
 def add_translate_tags(text):
     """
@@ -133,9 +134,11 @@ def process_header(line):
         opening_equals = match.group(1)
         header_text = match.group(2).strip()
         closing_equals = match.group(3)
+        text = opening_equals + header_text + closing_equals
         # Use add_translate_tags to avoid double wrapping
-        translated_header_text = add_translate_tags(header_text)
-        return f'{opening_equals} {translated_header_text} {closing_equals}'
+        translated_header_text = add_translate_tags(text)
+        print(translated_header_text)
+        return f'{translated_header_text}'
     return line
 
 
@@ -145,8 +148,11 @@ def process_double_name_space(line):
     """
     pipestart = False
     returnline = ""
-
-    # For File case
+    if (line.startswith("[[Category:")):
+        y = line.split(']]')[0]
+        m = '{{#translation:}}]]'
+        return y + m 
+            # For File case
     if line[2:6] == "File":
         i = 0
         while i < len(line):
@@ -499,7 +505,7 @@ def convert_to_translatable_wikitext(wikitext):
     in_table = False
     for line in lines:
         line = line.strip()
-        
+
         if line:
             if "<syntaxhighlight" in line:
                 # Start of a syntax highlight block
