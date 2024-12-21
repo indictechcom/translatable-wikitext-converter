@@ -23,6 +23,9 @@ sup_pattern = re.compile(r'(<sup>.*?</sup>|&#830[0-9];|&sup[0-9];)')
 math_tag_pattern = re.compile(r'(<math>.*?</math>)')
 math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
 time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
+gallery_pattern = re.compile(r'<gallery>|</gallery>')
+file_pattern = re.compile(r'File:')
+br_pattern = re.compile(r'<br>')
 
 
 def add_translate_tags(text):
@@ -42,7 +45,7 @@ def add_translate_tags(text):
     # If the text has any special characters, time values, or certain tags, don't wrap it in <translate> tags
     if (attribute_pattern.search(text) or special_char_pattern.match(text) or 
         hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
-        time_pattern.match(text)):  # Skip time values
+        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text)) :  # Skip time values
         return text
     
     # Wrap the entire block of text in <translate> tags
@@ -80,7 +83,7 @@ def process_table_line(line):
         # For table caption
         return f'{line[:2]}{add_translate_tags(line[2:].strip())}'
     elif line.startswith("|-"):
-        # Table row separator
+        # Table row separato r
         return line
     elif line.startswith("!"):
         # For table headers, split on ! and !! without breaking words
@@ -152,6 +155,11 @@ def process_double_name_space(line):
         y = line.split(']]')[0]
         m = '{{#translation:}}]]'
         return y + m 
+    if '|' not in line:
+        i = 0 
+        while line[i] != ']':
+                i+=1
+        return "[[Special:MyLanguage/" + line[2:i]+ "|<translate>" + line[2:i] + "</translate> ]]"
             # For File case
     if line[2:6] == "File":
         i = 0
@@ -165,7 +173,38 @@ def process_double_name_space(line):
                 returnline += "</translate>"
                 returnline += line[i]
             else:
-                returnline += line[i]
+                if line[i] == '|':
+                    if line[i+1] == ' ':
+                        if line[i+2:i+4] in ('left'):
+                            returnline += line[i]
+                        elif line[i+2:i+7] in  ('right','center','thumb'):
+                            returnline += line[i]
+                        else:
+                            print(line[i+1:i+7])
+                            returnline += "| <translate>"
+                            i+=2
+                            while line[i] != '|' and line[i] != ']':
+                                returnline += line[i]
+                                i += 1
+                            returnline += "</translate>"
+                            returnline += line[i]
+                    else:
+                        if line[i+1:i+3] in ('left'):
+                            returnline += line[i]
+                        elif line[i+1:i+6] in  ('right','center','thumb'):
+                            returnline += line[i]
+                        else:
+                            print(line[i+1:i+7])
+                            returnline += "| <translate>"
+                            i+=2
+                            while line[i] != '|' and line[i] != ']':
+                                returnline += line[i]
+                                i += 1
+                            returnline += "</translate>"
+                            returnline += line[i]
+
+                else:
+                     returnline += line[i]
             i += 1
         return returnline
 
@@ -175,6 +214,7 @@ def process_double_name_space(line):
 
     if len(words) > 1:
         returnline += "[["
+        returnline += "Special:MyLanguage/"
         returnline += words[0] + "|"
         words = words[1:]
 
@@ -499,12 +539,15 @@ def convert_to_translatable_wikitext(wikitext):
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
     Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
-    lines = wikitext.split('\n')
+    count = 0 
+    lines = re.split(r'(\n|<br>)', wikitext)
+    lines = [item for item in lines if item != '\n']
     converted_lines = []
     in_syntax_highlight = False
     in_table = False
     for line in lines:
         line = line.strip()
+        count+=1
 
         if line:
             if "<syntaxhighlight" in line:
@@ -546,6 +589,7 @@ def convert_to_translatable_wikitext(wikitext):
             elif line.startswith("["):
                 converted_lines.append(process_external_link(line))
             elif line.startswith("<nowiki>"):
+                
                 converted_lines.append(line)
             elif line.startswith("*") or line.startswith("#") or line.startswith(":") or line.startswith(";"):
                 converted_lines.append(process_lists(line))
