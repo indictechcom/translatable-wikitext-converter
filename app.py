@@ -26,6 +26,7 @@ time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
 gallery_pattern = re.compile(r'<gallery>|</gallery>')
 file_pattern = re.compile(r'File:')
 br_pattern = re.compile(r'<br>')
+magic_word = re.compile(r'__(.*?)__')
 
 
 def add_translate_tags(text):
@@ -45,7 +46,7 @@ def add_translate_tags(text):
     # If the text has any special characters, time values, or certain tags, don't wrap it in <translate> tags
     if (attribute_pattern.search(text) or special_char_pattern.match(text) or 
         hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
-        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text)) :  # Skip time values
+        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text)) :  # Skip time values
         return text
     
     # Wrap the entire block of text in <translate> tags
