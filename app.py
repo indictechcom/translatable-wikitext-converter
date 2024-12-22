@@ -27,6 +27,8 @@ gallery_pattern = re.compile(r'<gallery>|</gallery>')
 file_pattern = re.compile(r'File:')
 br_pattern = re.compile(r'<br>')
 magic_word = re.compile(r'__(.*?)__')
+alt_pattern = re.compile(r'alt')
+
 
 
 def add_translate_tags(text):
@@ -48,7 +50,6 @@ def add_translate_tags(text):
         hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
         time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text)) :  # Skip time values
         return text
-    
     # Wrap the entire block of text in <translate> tags
     return f'<translate>{text}</translate>'
 
@@ -138,7 +139,7 @@ def process_header(line):
         opening_equals = match.group(1)
         header_text = match.group(2).strip()
         closing_equals = match.group(3)
-        text = opening_equals + header_text + closing_equals
+        text = opening_equals + header_text + closing_equals + '\n' 
         # Use add_translate_tags to avoid double wrapping
         translated_header_text = add_translate_tags(text)
         print(translated_header_text)
@@ -156,7 +157,7 @@ def process_double_name_space(line):
         y = line.split(']]')[0]
         m = '{{#translation:}}]]'
         return y + m 
-    if '|' not in line:
+    if '|' not in line and not file_pattern.search(line):
         i = 0 
         while line[i] != ']':
                 i+=1
@@ -174,7 +175,7 @@ def process_double_name_space(line):
                 returnline += "</translate>"
                 returnline += line[i]
             else:
-                if line[i] == '|':
+                if line[i] == '|' and not alt_pattern.search(line):
                     if line[i+1] == ' ':
                         if line[i+2:i+4] in ('left'):
                             returnline += line[i]
@@ -197,7 +198,7 @@ def process_double_name_space(line):
                         else:
                             print(line[i+1:i+7])
                             returnline += "| <translate>"
-                            i+=2
+                            i+=1
                             while line[i] != '|' and line[i] != ']':
                                 returnline += line[i]
                                 i += 1
@@ -235,7 +236,6 @@ def process_double_name_space(line):
             if line[i] == '|' and pipestart is False:
                 pipestart = True
                 returnline += "|<translate>"
-
             elif pipestart is True and (line[i] == '|' or line[i] == ']'):
                 pipestart = False
                 returnline += "</translate>"
@@ -540,15 +540,14 @@ def convert_to_translatable_wikitext(wikitext):
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
     Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
-    count = 0 
-    lines = re.split(r'(\n|<br>)', wikitext)
-    lines = [item for item in lines if item != '\n']
+    lines = re.split(r'(?=[#\*]{2,3})|(<br>|\[\[[^\]]*\]\]|\]\]|}}|{{[^}]+}})', wikitext)
     converted_lines = []
     in_syntax_highlight = False
     in_table = False
     for line in lines:
-        line = line.strip()
-        count+=1
+        if line is not None:
+            line = line.strip()
+    
 
         if line:
             if "<syntaxhighlight" in line:
@@ -590,7 +589,6 @@ def convert_to_translatable_wikitext(wikitext):
             elif line.startswith("["):
                 converted_lines.append(process_external_link(line))
             elif line.startswith("<nowiki>"):
-                
                 converted_lines.append(line)
             elif line.startswith("*") or line.startswith("#") or line.startswith(":") or line.startswith(";"):
                 converted_lines.append(process_lists(line))
@@ -619,7 +617,7 @@ def convert_to_translatable_wikitext(wikitext):
                 converted_lines.append(add_translate_tags(line))
         else:
             converted_lines.append('')
-
+        converted_lines = [str(line) if line is not None else "" for line in converted_lines]
     return '\n'.join(converted_lines)
 
 @app.route('/')
