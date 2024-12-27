@@ -28,8 +28,10 @@ file_pattern = re.compile(r'File:')
 br_pattern = re.compile(r'<br>')
 magic_word = re.compile(r'__(.*?)__')
 alt_pattern = re.compile(r'alt')
-
-
+square_bracket_text_pattern = re.compile(r'\[\[(.*?)\]\]')
+square_bracket_with_pipeline_pattern = re.compile(r'\[\[([^\|\]]+)\|([^\]]+)\]\]')
+existing_translation_pattern = re.compile(r'#')
+interwiki_characters = re.compile(r'Special:[^ ]+')
 
 def add_translate_tags(text):
     """
@@ -48,14 +50,10 @@ def add_translate_tags(text):
     # If the text has any special characters, time values, or certain tags, don't wrap it in <translate> tags
     if (attribute_pattern.search(text) or special_char_pattern.match(text) or 
         hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
-        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text)) :  # Skip time values
+        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text) or interwiki_characters.search(text)) :  # Skip time values
         return text
     # Wrap the entire block of text in <translate> tags
     return f'<translate>{text}</translate>'
-
-
-
-
 
 def process_math(line):
     """
@@ -74,7 +72,6 @@ def process_math(line):
             return line.replace(math_content, math_content)  # Return math-related content as is
 
     return line
-
 
 def process_table_line(line):
     """
@@ -112,7 +109,6 @@ def process_table_line(line):
                 translated_cells.append(add_translate_tags(cell.strip()))  # Don't split into words
         return "".join(translated_cells)
 
-
 def process_div(line):
     """
     Processes any <div> tag and adds <translate> tags around the text content inside the div,
@@ -139,7 +135,7 @@ def process_header(line):
         opening_equals = match.group(1)
         header_text = match.group(2).strip()
         closing_equals = match.group(3)
-        text = opening_equals + header_text + closing_equals + '\n' 
+        text = opening_equals + header_text + closing_equals + '\n'  + '\n'
         # Use add_translate_tags to avoid double wrapping
         translated_header_text = add_translate_tags(text)
         print(translated_header_text)
@@ -153,17 +149,24 @@ def process_double_name_space(line):
     """
     pipestart = False
     returnline = ""
-    if (line.startswith("[[Category:")):
+    if (line.lower().startswith("[[category:".lower())  ):
         y = line.split(']]')[0]
-        m = '{{#translation:}}]]'
-        return y + m 
-    if '|' not in line and not file_pattern.search(line):
+        m = ''
+        if (not existing_translation_pattern.search(line)):
+            m = '{{#translation:}}]]'
+            return y + m
+        else:
+            return y + ']]' 
+    if '|' not in line and not file_pattern.search(line) and not interwiki_characters.search(line):
         i = 0 
         while line[i] != ']':
                 i+=1
         return "[[Special:MyLanguage/" + line[2:i]+ "|<translate>" + line[2:i] + "</translate> ]]"
-            # For File case
+
+    # For File case
+   
     if line[2:6] == "File":
+        print(line + "\n")
         i = 0
         while i < len(line):
             if line[i:i+4] == 'alt=':
@@ -175,7 +178,8 @@ def process_double_name_space(line):
                 returnline += "</translate>"
                 returnline += line[i]
             else:
-                if line[i] == '|' and not alt_pattern.search(line):
+                if line[i] == '|':
+                    print("Hello")
                     if line[i+1] == ' ':
                         if line[i+2:i+4] in ('left'):
                             returnline += line[i]
@@ -204,7 +208,6 @@ def process_double_name_space(line):
                                 i += 1
                             returnline += "</translate>"
                             returnline += line[i]
-
                 else:
                      returnline += line[i]
             i += 1
@@ -253,6 +256,7 @@ def process_external_link(line):
     that only the description part is wrapped in <translate> tags, leaving the URL untouched.
     """
     match = re.match(r'(\[https?://[^\s]+)\s+([^\]]+)\]', line)
+    print("Hi")
     if match:
         url_part = match.group(1)
         description_part = match.group(2)
@@ -540,7 +544,7 @@ def convert_to_translatable_wikitext(wikitext):
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
     Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
-    lines = re.split(r'(?=[#\*]{2,3})|(<br>|\[\[[^\]]*\]\]|\]\]|}}|{{[^}]+}})', wikitext)
+    lines = re.split(r'(?=[#\*]{2,3})|(</div>|<div>|<br>|\[\[[^\]]*\]\]|\]\]|}}|{{[^}]+}}|{{[^}]+}})', wikitext)
     converted_lines = []
     in_syntax_highlight = False
     in_table = False
