@@ -31,7 +31,7 @@ alt_pattern = re.compile(r'alt')
 square_bracket_text_pattern = re.compile(r'\[\[(.*?)\]\]')
 square_bracket_with_pipeline_pattern = re.compile(r'\[\[([^\|\]]+)\|([^\]]+)\]\]')
 existing_translation_pattern = re.compile(r'#')
-interwiki_characters = re.compile(r'Special:[^ ]+')
+
 
 def add_translate_tags(text):
     """
@@ -43,6 +43,9 @@ def add_translate_tags(text):
     if not text.strip():
         return text
 
+    if re.search(r'<translate>.*<translate>', text):
+        return text
+
     # If the text already has <translate> tags (including comments), do not add them
     if translate_tag_pattern.search(text):
         return text
@@ -50,7 +53,7 @@ def add_translate_tags(text):
     # If the text has any special characters, time values, or certain tags, don't wrap it in <translate> tags
     if (attribute_pattern.search(text) or special_char_pattern.match(text) or 
         hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
-        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text) or interwiki_characters.search(text)) :  # Skip time values
+        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text)) :  # Skip time values
         return text
     # Wrap the entire block of text in <translate> tags
     return f'<translate>{text}</translate>'
@@ -149,6 +152,8 @@ def process_double_name_space(line):
     """
     pipestart = False
     returnline = ""
+    if 'Special:MyLanguage/' in line:  
+        return line
     if (line.lower().startswith("[[category:".lower())  ):
         y = line.split(']]')[0]
         m = ''
@@ -157,7 +162,7 @@ def process_double_name_space(line):
             return y + m
         else:
             return y + ']]' 
-    if '|' not in line and not file_pattern.search(line) and not interwiki_characters.search(line):
+    if '|' not in line and not file_pattern.search(line):
         i = 0 
         while line[i] != ']':
                 i+=1
@@ -217,7 +222,7 @@ def process_double_name_space(line):
     line1 = line[2:-2]
     words = line1.split("|")
 
-    if len(words) > 1:
+    if len(words) > 1 :
         returnline += "[["
         returnline += "Special:MyLanguage/"
         returnline += words[0] + "|"
@@ -256,7 +261,7 @@ def process_external_link(line):
     that only the description part is wrapped in <translate> tags, leaving the URL untouched.
     """
     match = re.match(r'(\[https?://[^\s]+)\s+([^\]]+)\]', line)
-    print("Hi")
+
     if match:
         url_part = match.group(1)
         description_part = match.group(2)
