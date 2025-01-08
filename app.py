@@ -17,19 +17,33 @@ header_cell_separator_pattern = re.compile(r"(!{1,2})")
 # Regex to detect HTML entities (special characters)
 special_char_pattern = re.compile(r"&\w+;")
 # Regex for hiero, sub, sup, and math tags
+# Matches text wrapped in <hiero>...</hiero> 
 hiero_pattern = re.compile(r'(<hiero>.*?</hiero>)')
+# Matches text wrapped in <sub>...</sub> tags or Unicode subscript characters (e.g., &#8320;).
 sub_pattern = re.compile(r'(<sub>.*?</sub>|&#832[0-9];)')
+# Matches text wrapped in <sup>...</sup> tags or Unicode superscript characters (e.g., &#8300;, &sup1;).
 sup_pattern = re.compile(r'(<sup>.*?</sup>|&#830[0-9];|&sup[0-9];)')
+# Matches text wrapped in <math>...</math> tags.
 math_tag_pattern = re.compile(r'(<math>.*?</math>)')
+# Matches {{math|...}} templates.
 math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
+# Matches time strings in formats like "12:34", "3:45PM", or "11:00am".
 time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
+# Matches <gallery> and </gallery> tags.
 gallery_pattern = re.compile(r'<gallery>|</gallery>')
+# Matches occurrences of "File:".
 file_pattern = re.compile(r'File:')
+# Matches <br> tags.
 br_pattern = re.compile(r'<br>')
+# Matches magic words wrapped in double underscores (e.g., __NOTOC__).
 magic_word = re.compile(r'__(.*?)__')
+# Matches occurrences of the word "alt".
 alt_pattern = re.compile(r'alt')
+# Matches text inside double square brackets (e.g., [[example]]).
 square_bracket_text_pattern = re.compile(r'\[\[(.*?)\]\]')
+# Matches links with a pipe separator in double square brackets (e.g., [[link|display text]]).
 square_bracket_with_pipeline_pattern = re.compile(r'\[\[([^\|\]]+)\|([^\]]+)\]\]')
+# Matches occurrences of the '#'
 existing_translation_pattern = re.compile(r'#')
 
 
