@@ -1,89 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wikitext to Translatable Wikitext Converter</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.0/css/bootstrap.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.0/css/bootstrap.min.css"
+    />
     <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-        }
-        .wrapper {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .main-content {
-            flex: 1;
-        }
-        .navbar {
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 1rem 2rem;
-        }
-        .footer {
-            background-color: #f8f9fa;
-            text-align: center;
-            padding: 1rem 0;
-            position: sticky;
-            bottom: 0;
-            width: 100%;
-        }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      .wrapper {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .main-content {
+        flex: 1;
+      }
+      .navbar {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 1rem 2rem;
+      }
+      .footer {
+        background-color: #f8f9fa;
+        text-align: center;
+        padding: 1rem 0;
+        position: sticky;
+        bottom: 0;
+        width: 100%;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="wrapper">
-        <!-- Header -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-            <a class="navbar-brand" href="/">Wiki Translate Tagger</a>
-        </nav>
+      <!-- Header -->
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="/">Wiki Translate Tagger</a>
+      </nav>
 
-        <!-- Main Content -->
-        <div class="main-content container mt-5">
-            <div class="row">
-                <!-- Input Column -->
-                <div class="col-md-6">
-                    <h5>Input Wikitext</h5>
-                    <form action="/convert" method="post">
-                        <div class="mb-3">
-                            <textarea class="form-control" id="wikitext" name="wikitext" rows="15" placeholder="Enter Wikitext here...">{{ original }}</textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Convert to Translatable Wikitext</button>
-                    </form>
-                </div>
-                <!-- Output Column -->
-                {% if converted %}
-                <div class="col-md-6">
-                    <h5>Translatable Wikitext Output</h5>
-                    <textarea class="form-control" id="outputText" rows="15" readonly>{{ converted }}</textarea>
-                    <button class="btn btn-secondary mt-3" onclick="copyToClipboard()">Copy to Clipboard</button>
-                </div>
-                {% endif %}
-            </div>
+      <!-- Main Content -->
+      <div class="main-content container mt-5">
+        <div class="row">
+          <!-- Input Column -->
+          <div class="col-md-6">
+            <h5>Input Wikitext</h5>
+            <form action="/convert" method="post">
+              <div class="mb-3">
+                <textarea
+                  class="form-control"
+                  id="wikitext"
+                  name="wikitext"
+                  rows="15"
+                  placeholder="Enter Wikitext here..."
+                >
+{{ original }}</textarea
+                >
+              </div>
+              <button type="submit" class="btn btn-primary">
+                Convert to Translatable Wikitext
+              </button>
+            </form>
+          </div>
+          <!-- Output Column -->
+          {% if converted %}
+          <div class="col-md-6">
+            <h5>Translatable Wikitext Output</h5>
+            <textarea class="form-control" id="outputText" rows="15" readonly>
+{{ converted }}</textarea
+            >
+            <button class="btn btn-secondary mt-3" onclick="copyToClipboard()">
+              Copy to Clipboard
+            </button>
+          </div>
+          {% endif %}
         </div>
+      </div>
 
-        <!-- Footer -->
-        <footer class="footer">
-            <div class="d-flex justify-content-center align-items-center">
-                <p class="mb-0">Created by: <a href="https://meta.wikimedia.org/wiki/User:Gopavasanth">Gopa Vasanth</a></p>
-                <span class="mx-2">|</span>
-                <p class="mb-0">More info: <a href="https://meta.wikimedia.org/wiki/Indic-TechCom">Indic-TechCom</a></p>
-                <span class="mx-2">|</span>
-                <p class="mb-0"><a href="https://github.com/indictechcom/translatable-wikitext-converter">View source</a></p>
-            </div>
-        </footer>
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="d-flex justify-content-center align-items-center">
+          <p class="mb-0">
+            Created by:
+            <a href="https://meta.wikimedia.org/wiki/User:Gopavasanth"
+              >Gopa Vasanth</a
+            >
+          </p>
+          <span class="mx-2">|</span>
+          <p class="mb-0">
+            More info:
+            <a href="https://meta.wikimedia.org/wiki/Indic-TechCom"
+              >Indic-TechCom</a
+            >
+          </p>
+          <span class="mx-2">|</span>
+          <p class="mb-0">
+            <a
+              href="https://github.com/indictechcom/translatable-wikitext-converter"
+              >View source</a
+            >
+          </p>
+          <span class="mx-2">|</span>
+          <p class="mb-0">
+            Last updated on: <span id="lastUpdatedDate"></span>
+          </p>
+        </div>
+      </footer>
     </div>
 
     <!-- Bootstrap JS and dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.0/js/bootstrap.bundle.min.js"></script>
     <script>
-        function copyToClipboard() {
-            var copyText = document.getElementById("outputText");
-            copyText.select();
-            document.execCommand("copy");
-            alert("Copied to clipboard!");
-        }
+      function copyToClipboard() {
+        var copyText = document.getElementById("outputText");
+        copyText.select();
+        document.execCommand("copy");
+        alert("Copied to clipboard!");
+      }
+
+      // Fetch the last commit date from the GitHub API
+      fetch(
+        "https://api.github.com/repos/indictechcom/translatable-wikitext-converter/commits"
+      )
+        .then((response) => response.json())
+        .then((data) => {
+          if (data && data.length > 0) {
+            const lastCommitDate = new Date(data[0].commit.committer.date);
+            const formattedDate = lastCommitDate.toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            });
+            document.getElementById("lastUpdatedDate").textContent =
+              formattedDate;
+          } else {
+            document.getElementById("lastUpdatedDate").textContent =
+              "Unavailable";
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching commit data:", error);
+          document.getElementById("lastUpdatedDate").textContent =
+            "Unavailable";
+        });
     </script>
-</body>
+  </body>
 </html>
