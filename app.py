@@ -24,6 +24,7 @@ math_tag_pattern = re.compile(r'(<math>.*?</math>)')
 math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
 time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
 
+
 def add_translate_tags(text):
     """
     Wraps the entire text in <translate> tags if it doesn't already have them,
@@ -217,17 +218,22 @@ def process_lists(line):
         if line[i] in ['*', '#', ':', ';']:
             continue
         else:
-            words = line[i:].split("<br>")
+            words = line[i:].split("<br>") 
             for j in range(len(words)):
-                worder = words[j].split(":")
-                for k in range(len(worder)):
-                    if worder[k] == '':
-                        continue
-                    else:
-                        worder[k] = f"<translate>{worder[k]}</translate>"
-                words[j] = ":".join(worder)
+                if "https://" in words[j]: 
+                    words[j] = f"<translate>{words[j]}</translate>"
+                else: 
+                    worder = words[j].split(":")
+                    for k in range(len(worder)):
+                        if worder[k] == '':
+                            continue
+                        else:
+                            worder[k] = f"<translate>{worder[k]}</translate>"
+                    words[j] = ":".join(worder) 
+                    
             newstring = "<br>".join(words)
-            return f"{line[:i]}{newstring}"
+            return f"{line[:i]}{newstring}"  
+
 
 def process_doublecurly(line):
     """
