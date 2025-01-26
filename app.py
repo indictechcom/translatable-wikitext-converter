@@ -527,6 +527,8 @@ def convert_to_translatable_wikitext(wikitext):
             elif in_syntax_highlight:
                 # Inside a syntaxhighlight block, do not process the line
                 converted_lines.append(line)
+            elif line.startswith("'''"):
+                converted_lines.append(process_lists(line))
             elif line.startswith("{|"):
                 in_table = True
                 converted_lines.append(line)
