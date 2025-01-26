@@ -130,12 +130,8 @@ def process_div(line):
 def process_header(line):
     match = header_pattern.match(line)
     if match:
-        opening_equals = match.group(1)
-        header_text = match.group(2).strip()
-        closing_equals = match.group(3)
-        # Use add_translate_tags to avoid double wrapping
-        translated_header_text = add_translate_tags(header_text)
-        return f'{opening_equals} {translated_header_text} {closing_equals}'
+        translated_header_text = add_translate_tags(match.group())
+        return translated_header_text
     return line
 
 
