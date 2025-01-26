@@ -222,6 +222,8 @@ def process_lists(line):
             for j in range(len(words)):
                 if "https://" in words[j]: 
                     words[j] = f"<translate>{words[j]}</translate>"
+                elif "[[" in words[j]:
+                    words[j] = process_double_name_space(words[j])
                 else: 
                     worder = words[j].split(":")
                     for k in range(len(worder)):
