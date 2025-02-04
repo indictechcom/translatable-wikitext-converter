@@ -7,7 +7,7 @@ app = Flask(__name__)
 # Updated regex to detect any presence of <translate> tags (including comments and spaces)
 translate_tag_pattern = re.compile(r"<translate\b[^>]*>.*?</translate>", re.DOTALL)
 # Regex to match attributes like rowspan, colspan, etc.
-attribute_pattern = re.compile(r"\b\w+=[^\s\|]+")
+attribute_pattern = re.compile(r"\b\w+(?!==)=([^\s|]+)")
 # Regex to detect table cell separators (| and ||)
 table_cell_separator_pattern = re.compile(r"(\|\||\||\*)")
 # Regex to detect headers in the format of == Header ==
@@ -17,12 +17,35 @@ header_cell_separator_pattern = re.compile(r"(!{1,2})")
 # Regex to detect HTML entities (special characters)
 special_char_pattern = re.compile(r"&\w+;")
 # Regex for hiero, sub, sup, and math tags
+# Matches text wrapped in <hiero>...</hiero> 
 hiero_pattern = re.compile(r'(<hiero>.*?</hiero>)')
+# Matches text wrapped in <sub>...</sub> tags or Unicode subscript characters (e.g., &#8320;).
 sub_pattern = re.compile(r'(<sub>.*?</sub>|&#832[0-9];)')
+# Matches text wrapped in <sup>...</sup> tags or Unicode superscript characters (e.g., &#8300;, &sup1;).
 sup_pattern = re.compile(r'(<sup>.*?</sup>|&#830[0-9];|&sup[0-9];)')
+# Matches text wrapped in <math>...</math> tags.
 math_tag_pattern = re.compile(r'(<math>.*?</math>)')
+# Matches {{math|...}} templates.
 math_template_pattern = re.compile(r'(\{\{math\|.*?\}\})')
+# Matches time strings in formats like "12:34", "3:45PM", or "11:00am".
 time_pattern = re.compile(r'\b\d{1,2}:\d{2}(AM|PM|am|pm)?\b')
+# Matches <gallery> and </gallery> tags.
+gallery_pattern = re.compile(r'<gallery>|</gallery>')
+# Matches occurrences of "File:".
+file_pattern = re.compile(r'File:')
+# Matches <br> tags.
+br_pattern = re.compile(r'<br>')
+# Matches magic words wrapped in double underscores (e.g., __NOTOC__).
+magic_word = re.compile(r'__(.*?)__')
+# Matches occurrences of the word "alt".
+alt_pattern = re.compile(r'alt')
+# Matches text inside double square brackets (e.g., [[example]]).
+square_bracket_text_pattern = re.compile(r'\[\[(.*?)\]\]')
+# Matches links with a pipe separator in double square brackets (e.g., [[link|display text]]).
+square_bracket_with_pipeline_pattern = re.compile(r'\[\[([^\|\]]+)\|([^\]]+)\]\]')
+# Matches occurrences of the '#'
+existing_translation_pattern = re.compile(r'#')
+
 
 
 def add_translate_tags(text):
@@ -35,6 +58,9 @@ def add_translate_tags(text):
     if not text.strip():
         return text
 
+    if re.search(r'<translate>.*<translate>', text):
+        return text
+
     # If the text already has <translate> tags (including comments), do not add them
     if translate_tag_pattern.search(text):
         return text
@@ -42,15 +68,10 @@ def add_translate_tags(text):
     # If the text has any special characters, time values, or certain tags, don't wrap it in <translate> tags
     if (attribute_pattern.search(text) or special_char_pattern.match(text) or 
         hiero_pattern.search(text) or sub_pattern.search(text) or sup_pattern.search(text) or 
-        time_pattern.match(text)):  # Skip time values
+        time_pattern.match(text) or gallery_pattern.search(text) or file_pattern.search(text) or br_pattern.search(text) or magic_word.search(text)) :  # Skip time values
         return text
-    
     # Wrap the entire block of text in <translate> tags
     return f'<translate>{text}</translate>'
-
-
-
-
 
 def process_math(line):
     """
@@ -70,7 +91,6 @@ def process_math(line):
 
     return line
 
-
 def process_table_line(line):
     """
     Processes a single line of a table and adds <translate> tags where necessary,
@@ -80,7 +100,7 @@ def process_table_line(line):
         # For table caption
         return f'{line[:2]}{add_translate_tags(line[2:].strip())}'
     elif line.startswith("|-"):
-        # Table row separator
+        # Table row separato r
         return line
     elif line.startswith("!"):
         # For table headers, split on ! and !! without breaking words
@@ -106,7 +126,6 @@ def process_table_line(line):
             else:
                 translated_cells.append(add_translate_tags(cell.strip()))  # Don't split into words
         return "".join(translated_cells)
-
 
 def process_div(line):
     """
@@ -142,9 +161,26 @@ def process_double_name_space(line):
     """
     pipestart = False
     returnline = ""
+    if 'Special:MyLanguage/' in line:  
+        return line
+    if (line.lower().startswith("[[category:".lower())  ):
+        y = line.split(']]')[0]
+        m = ''
+        if (not existing_translation_pattern.search(line)):
+            m = '{{#translation:}}]]'
+            return y + m
+        else:
+            return y + ']]' 
+    if '|' not in line and not file_pattern.search(line):
+        i = 0 
+        while line[i] != ']':
+                i+=1
+        return "[[Special:MyLanguage/" + line[2:i]+ "|<translate>" + line[2:i] + "</translate> ]]"
 
     # For File case
+   
     if line[2:6] == "File":
+        print(line + "\n")
         i = 0
         while i < len(line):
             if line[i:i+4] == 'alt=':
@@ -156,7 +192,38 @@ def process_double_name_space(line):
                 returnline += "</translate>"
                 returnline += line[i]
             else:
-                returnline += line[i]
+                if line[i] == '|':
+                    print("Hello")
+                    if line[i+1] == ' ':
+                        if line[i+2:i+4] in ('left'):
+                            returnline += line[i]
+                        elif line[i+2:i+7] in  ('right','center','thumb'):
+                            returnline += line[i]
+                        else:
+                            print(line[i+1:i+7])
+                            returnline += "| <translate>"
+                            i+=2
+                            while line[i] != '|' and line[i] != ']':
+                                returnline += line[i]
+                                i += 1
+                            returnline += "</translate>"
+                            returnline += line[i]
+                    else:
+                        if line[i+1:i+3] in ('left'):
+                            returnline += line[i]
+                        elif line[i+1:i+6] in  ('right','center','thumb'):
+                            returnline += line[i]
+                        else:
+                            print(line[i+1:i+7])
+                            returnline += "| <translate>"
+                            i+=1
+                            while line[i] != '|' and line[i] != ']':
+                                returnline += line[i]
+                                i += 1
+                            returnline += "</translate>"
+                            returnline += line[i]
+                else:
+                     returnline += line[i]
             i += 1
         return returnline
     print(line)
@@ -215,6 +282,7 @@ def process_external_link(line):
     that only the description part is wrapped in <translate> tags, leaving the URL untouched.
     """
     match = re.match(r'(\[https?://[^\s]+)\s+([^\]]+)\]', line)
+
     if match:
         url_part = match.group(1)
         description_part = match.group(2)
@@ -514,8 +582,10 @@ def convert_to_translatable_wikitext(wikitext):
     in_syntax_highlight = False
     in_table = False
     for line in lines:
-        line = line.strip()
-        
+        if line is not None:
+            line = line.strip()
+    
+
         if line:
             if "<syntaxhighlight" in line:
                 # Start of a syntax highlight block
@@ -586,7 +656,7 @@ def convert_to_translatable_wikitext(wikitext):
                 converted_lines.append(add_translate_tags(line))
         else:
             converted_lines.append('')
-
+        converted_lines = [str(line) if line is not None else "" for line in converted_lines]
     return '\n'.join(converted_lines)
 
 @app.route('/')
