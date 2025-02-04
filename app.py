@@ -159,24 +159,35 @@ def process_double_name_space(line):
                 returnline += line[i]
             i += 1
         return returnline
-
+    print(line)
     # For normal pipe name spaces
-    line1 = line[2:-2]
-    words = line1.split("|")
+    if ":" in line[10:] and "Category" not in line[2:]:
+        line1 = line
+    else:
+        line1 = line[2:-2]
+    print("This is a special word " + line[7:])
+    words = re.split(r'\|+|\]\]+', line1)
+    print(words)
 
     if len(words) > 1:
-        returnline += "[["
+        if ":" not in line1:
+            returnline += "[["
         returnline += words[0] + "|"
         words = words[1:]
-
+        print(words)
         for word in words:
-            if word.strip() != "":
-                returnline += "<translate>"
-                returnline += word
-                returnline += "</translate>"
+            if ":"  in word:
+                returnline+=": <translate>" + word[1:] + "</translate>" 
             else:
-                returnline += "|"
-        returnline += "]]"
+                if word.strip() != "":
+                    returnline += "<translate>"
+                    returnline += word
+                    returnline += "</translate>"
+                else:
+                    returnline += "|"
+                returnline += "]]"
+        if ":" not in returnline:
+            returnline = returnline[:-3]
         return returnline
 
     # For cases without pipe (just links)
@@ -185,6 +196,7 @@ def process_double_name_space(line):
             if line[i] == '|' and pipestart is False:
                 pipestart = True
                 returnline += "|<translate>"
+        
 
             elif pipestart is True and (line[i] == '|' or line[i] == ']'):
                 pipestart = False
@@ -497,7 +509,7 @@ def convert_to_translatable_wikitext(wikitext):
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
     Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
-    lines = wikitext.split('\n')
+    lines = re.split("\n",wikitext)
     converted_lines = []
     in_syntax_highlight = False
     in_table = False
