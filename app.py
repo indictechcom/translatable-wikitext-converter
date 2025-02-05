@@ -112,6 +112,7 @@ def process_table_line(line):
             else:
                 translated_headers.append(add_translate_tags(header.strip()))  # Don't split into words
         return "".join(translated_headers)
+    
     else:
         # For table rows, ensure content is wrapped but separators are untouched
         cells = table_cell_separator_pattern.split(line)
@@ -123,6 +124,17 @@ def process_table_line(line):
                 translated_cells.append(cell)
             elif cell.endswith("}}"):
                 translated_cells.append(add_translate_tags(cell[:-2])+"}}")
+            elif cell.startswith("| colspan="):
+                match = re.match(r'\| colspan=\d+\|(.*)', cell)
+                if match:
+                    content = match.group(1)
+                    if content.startswith("[[File:") or content.startswith("[[Image:"):
+                        # Preserve entire cell with colspan and file reference
+                        translated_cells.append(process_double_name_space(cell))
+                    else:
+                        # For non-file colspan cells, add translate tags
+                        translated_part = add_translate_tags(content)
+                        translated_cells.append(f"| colspan={cell.split('|')[1]}|{translated_part}")
             else:
                 translated_cells.append(add_translate_tags(cell.strip()))  # Don't split into words
         return "".join(translated_cells)
