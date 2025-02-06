@@ -96,11 +96,14 @@ def process_table_line(line):
     Processes a single line of a table and adds <translate> tags where necessary,
     ensuring that only the actual content of table cells is wrapped, not the separators.
     """
+    if not line:
+        return line
+
     if line.startswith("|+"):
         # For table caption
-        return f'{line[:2]}{add_translate_tags(line[2:].strip())}'
+        return f'{line[:2]}{add_translate_tags(line[2:].strip()) if len(line) > 2 else ""}'
     elif line.startswith("|-"):
-        # Table row separato r
+        # Table row separator
         return line
     elif line.startswith("!"):
         # For table headers, split on ! and !! without breaking words
@@ -110,9 +113,13 @@ def process_table_line(line):
             if header in ['!', '!!']:  # Preserve the ! and !! without adding translate tags
                 translated_headers.append(header)
             else:
-                translated_headers.append(add_translate_tags(header.strip()))  # Don't split into words
+                # Safely process header content
+                processed_header = header.strip()
+                if processed_header:
+                    processed_header = process_external_link(processed_header)
+                    processed_header = process_double_name_space(processed_header)
+                    translated_headers.append(add_translate_tags(processed_header))
         return "".join(translated_headers)
-    
     else:
         # For table rows, ensure content is wrapped but separators are untouched
         cells = table_cell_separator_pattern.split(line)
@@ -120,23 +127,20 @@ def process_table_line(line):
         for cell in cells:
             if cell in ['|', '||', '*']:  # Leave separators as is
                 translated_cells.append(cell)
-            elif cell.startswith("{{"):
-                translated_cells.append(cell)
-            elif cell.endswith("}}"):
-                translated_cells.append(add_translate_tags(cell[:-2])+"}}")
-            elif cell.startswith("| colspan="):
-                match = re.match(r'\| colspan=\d+\|(.*)', cell)
-                if match:
-                    content = match.group(1)
-                    if content.startswith("[[File:") or content.startswith("[[Image:"):
-                        # Preserve entire cell with colspan and file reference
-                        translated_cells.append(process_double_name_space(cell))
-                    else:
-                        # For non-file colspan cells, add translate tags
-                        translated_part = add_translate_tags(content)
-                        translated_cells.append(f"| colspan={cell.split('|')[1]}|{translated_part}")
-            else:
-                translated_cells.append(add_translate_tags(cell.strip()))  # Don't split into words
+            elif cell and cell.startswith("[["):
+                # Process wiki links using process_double_name_space
+                processed_cell = process_double_name_space(cell)
+                translated_cells.append(processed_cell)
+            elif cell and cell.startswith("http"):
+                # Process external links
+                processed_cell = process_external_link(cell)
+                translated_cells.append(processed_cell)
+            elif cell and cell.startswith("{{"):
+                # Process double curly braces
+                processed_cell = process_doublecurly(cell)
+                translated_cells.append(processed_cell)
+            elif cell:
+                translated_cells.append(add_translate_tags(cell.strip()))
         return "".join(translated_cells)
 
 def process_div(line):
@@ -183,11 +187,6 @@ def process_double_name_space(line):
             return y + m
         else:
             return y + ']]' 
-    if '|' not in line and not file_pattern.search(line):
-        i = 0 
-        while line[i] != ']':
-                i+=1
-        return "[[Special:MyLanguage/" + line[2:i]+ "|<translate>" + line[2:i] + "</translate> ]]"
 
     # For File case
    
@@ -205,7 +204,6 @@ def process_double_name_space(line):
                 returnline += line[i]
             else:
                 if line[i] == '|':
-                    print("Hello")
                     if line[i+1] == ' ':
                         if line[i+2:i+4] in ('left'):
                             returnline += line[i]
