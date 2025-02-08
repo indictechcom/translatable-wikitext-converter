@@ -95,9 +95,12 @@ def process_table_line(line):
     Processes a single line of a table and adds <translate> tags where necessary,
     ensuring that only the actual content of table cells is wrapped, not the separators.
     """
+    if not line:
+        return line
+
     if line.startswith("|+"):
         # For table caption
-        return f'{line[:2]}{add_translate_tags(line[2:].strip())}'
+        return f'{line[:2]}{add_translate_tags(line[2:].strip()) if len(line) > 2 else ""}'
     elif line.startswith("|-"):
         # Table row separato r
         return line
@@ -109,7 +112,12 @@ def process_table_line(line):
             if header in ['!', '!!']:  # Preserve the ! and !! without adding translate tags
                 translated_headers.append(header)
             else:
-                translated_headers.append(add_translate_tags(header.strip()))  # Don't split into words
+                # Safely process header content
+                processed_header = header.strip()
+                if processed_header:
+                    processed_header = process_external_link(processed_header)
+                    processed_header = process_double_name_space(processed_header)
+                    translated_headers.append(add_translate_tags(processed_header))
         return "".join(translated_headers)
     else:
         # For table rows, ensure content is wrapped but separators are untouched
@@ -118,12 +126,20 @@ def process_table_line(line):
         for cell in cells:
             if cell in ['|', '||', '*']:  # Leave separators as is
                 translated_cells.append(cell)
-            elif cell.startswith("{{"):
-                translated_cells.append(cell)
-            elif cell.endswith("}}"):
-                translated_cells.append(add_translate_tags(cell[:-2])+"}}")
-            else:
-                translated_cells.append(add_translate_tags(cell.strip()))  # Don't split into words
+            elif cell and cell.startswith("[["):
+                # Process wiki links using process_double_name_space
+                processed_cell = process_double_name_space(cell)
+                translated_cells.append(processed_cell)
+            elif cell and cell.startswith("http"):
+                # Process external links
+                processed_cell = process_external_link(cell)
+                translated_cells.append(processed_cell)
+            elif cell and cell.startswith("{{"):
+                # Process double curly braces
+                processed_cell = process_doublecurly(cell)
+                translated_cells.append(processed_cell)
+            elif cell:
+                translated_cells.append(add_translate_tags(cell.strip()))
         return "".join(translated_cells)
 
 def process_div(line):
@@ -146,18 +162,6 @@ def process_div(line):
         return f'{opening_div_tag}{translated_content}{closing_div_tag}'
     return line
 
-def process_header(line):
-    match = header_pattern.match(line)
-    if match:
-        opening_equals = match.group(1)
-        header_text = match.group(2).strip()
-        closing_equals = match.group(3)
-        text = opening_equals + header_text + closing_equals + '\n'  + '\n'
-        # Use add_translate_tags to avoid double wrapping
-        translated_header_text = add_translate_tags(text)
-        print(translated_header_text)
-        return f'{translated_header_text}'
-    return line
 
 
 def process_double_name_space(line):
@@ -179,11 +183,10 @@ def process_double_name_space(line):
     if '|' not in line and not file_pattern.search(line):
         i = 0 
         while line[i] != ']':
-                i+=1
+            i+=1
         return "[[Special:MyLanguage/" + line[2:i]+ "|<translate>" + line[2:i] + "</translate> ]]"
 
     # For File case
-   
     if line[2:6] == "File":
         print(line + "\n")
         i = 0
@@ -198,7 +201,6 @@ def process_double_name_space(line):
                 returnline += line[i]
             else:
                 if line[i] == '|':
-                    print("Hello")
                     if line[i+1] == ' ':
                         if line[i+2:i+4] in ('left'):
                             returnline += line[i]
@@ -231,25 +233,35 @@ def process_double_name_space(line):
                      returnline += line[i]
             i += 1
         return returnline
-
+    print(line)
     # For normal pipe name spaces
-    line1 = line[2:-2]
-    words = line1.split("|")
+    if ":" in line[10:] and "Category" not in line[2:]:
+        line1 = line
+    else:
+        line1 = line[2:-2]
+    print("This is a special word " + line[7:])
+    words = re.split(r'\|+|\]\]+', line1)
+    print(words)
 
-    if len(words) > 1 :
-        returnline += "[["
-        returnline += "Special:MyLanguage/"
+    if len(words) > 1:
+        if ":" not in line1:
+            returnline += "[["
         returnline += words[0] + "|"
         words = words[1:]
-
+        print(words)
         for word in words:
-            if word.strip() != "":
-                returnline += "<translate>"
-                returnline += word
-                returnline += "</translate>"
+            if ":"  in word:
+                returnline+=": <translate>" + word[1:] + "</translate>" 
             else:
-                returnline += "|"
-        returnline += "]]"
+                if word.strip() != "":
+                    returnline += "<translate>"
+                    returnline += word
+                    returnline += "</translate>"
+                else:
+                    returnline += "|"
+                returnline += "]]"
+        if ":" not in returnline:
+            returnline = returnline[:-3]
         return returnline
 
     # For cases without pipe (just links)
@@ -258,6 +270,8 @@ def process_double_name_space(line):
             if line[i] == '|' and pipestart is False:
                 pipestart = True
                 returnline += "|<translate>"
+        
+
             elif pipestart is True and (line[i] == '|' or line[i] == ']'):
                 pipestart = False
                 returnline += "</translate>"
@@ -291,17 +305,24 @@ def process_lists(line):
         if line[i] in ['*', '#', ':', ';']:
             continue
         else:
-            words = line[i:].split("<br>")
+            words = line[i:].split("<br>") 
             for j in range(len(words)):
-                worder = words[j].split(":")
-                for k in range(len(worder)):
-                    if worder[k] == '':
-                        continue
-                    else:
-                        worder[k] = f"<translate>{worder[k]}</translate>"
-                words[j] = ":".join(worder)
+                if "https://" in words[j]: 
+                    words[j] = f"<translate>{words[j]}</translate>"
+                elif "[[" in words[j]:
+                    words[j] = process_double_name_space(words[j])
+                else: 
+                    worder = words[j].split(":")
+                    for k in range(len(worder)):
+                        if worder[k] == '':
+                            continue
+                        else:
+                            worder[k] = f"<translate>{worder[k]}</translate>"
+                    words[j] = ":".join(worder) 
+                    
             newstring = "<br>".join(words)
-            return f"{line[:i]}{newstring}"
+            return f"{line[:i]}{newstring}"  
+
 
 def process_doublecurly(line):
     """
@@ -563,7 +584,7 @@ def convert_to_translatable_wikitext(wikitext):
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
     Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
-    lines = re.split(r'(?=[#\*]{2,3})|(</div>|<div>|<br>|\[\[[^\]]*\]\]|\]\]|}}|{{[^}]+}}|{{[^}]+}})', wikitext)
+    lines = re.split("\n" , wikitext)
     converted_lines = []
     in_syntax_highlight = False
     in_table = False
@@ -595,6 +616,8 @@ def convert_to_translatable_wikitext(wikitext):
             elif in_syntax_highlight:
                 # Inside a syntaxhighlight block, do not process the line
                 converted_lines.append(line)
+            elif line.startswith("'''"):
+                converted_lines.append(process_lists(line))
             elif line.startswith("{|"):
                 in_table = True
                 converted_lines.append(line)
