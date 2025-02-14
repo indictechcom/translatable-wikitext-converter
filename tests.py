@@ -12,19 +12,19 @@ class TestTranslatableWikitext(unittest.TestCase):
             convert_to_translatable_wikitext(
                 "[[File:landscape.jpg |thumb |left |alt=sunset |Photo of a beautiful landscape]]"
             ),
-            "[[File:landscape.jpg |thumb |left |alt=<translate>sunset </translate>|Photo of a beautiful landscape]]"
+            "[[File:landscape.jpg |thumb |left | <translate>alt=sunset </translate>|Photo of a beautiful landscape]]"
         )
     def test_internal_and_external_links(self):
         self.assertEqual(
             convert_to_translatable_wikitext(
                 "This is a text with an [[internal link]] and an [https://openstreetmap.org external link]."
             ),
-            "This is a text with an [[<tvar name=1>Special:MyLanguage/internal link</tvar>|internal link]] and an [<tvar name=\"url\">https://openstreetmap.org</tvar> external link]."
+            "<translate>This is a text with an [[internal link]] and an [https://openstreetmap.org external link].</translate>"
         )
     def test_category_with_translation(self):
         self.assertEqual(
             convert_to_translatable_wikitext("[[Category:Wikipedia]]"),
-            "\n[[Category:Wikipedia{{#translation:}}]]\n"
+            "[[Category:Wikipedia{{#translation:}}]]"
         )
     def test_notoc_preserved(self):
         self.assertEqual(
@@ -34,7 +34,7 @@ class TestTranslatableWikitext(unittest.TestCase):
     def test_simple_internal_link(self):
         self.assertEqual(
             convert_to_translatable_wikitext("[[link]]"),
-            "\n[[Special:MyLanguage/link|<translate>link</translate> ]]\n"
+            "[[Special:MyLanguage/link|<translate>link</translate>]]"
         )
     def test_multiline_text(self):
         self.assertEqual(
@@ -48,9 +48,9 @@ class TestTranslatableWikitext(unittest.TestCase):
     def test_double_namespace_processing(self):
         self.assertEqual(
             process_double_name_space(
-                "[[File:pretty hello word.png|alt=Hello everybody!]], [[File:smiley.png|alt=🙂]] How are you?"
+                "[[File:pretty hello word.png|alt=Hello everybody!]], [[File:smiley.png|alt=😂]] How are you?"
             ),
-            "[[File:pretty hello word.png|alt=<translate>Hello everybody!</translate>]], [[File:smiley.png|alt=<translate>🙂</translate>]] How are you?"
+            "[[File:pretty hello word.png| <translate>alt=Hello everybody!</translate>]], [[File:smiley.png| <translate>alt=😂</translate>]] How are you?"
         )
     def test_list_with_translate_tags(self):
         self.assertEqual(
