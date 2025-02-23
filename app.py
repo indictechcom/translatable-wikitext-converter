@@ -47,6 +47,7 @@ square_bracket_with_pipeline_pattern = re.compile(r'\[\[([^\|\]]+)\|([^\]]+)\]\]
 existing_translation_pattern = re.compile(r'#')
 
 
+
 def add_translate_tags(text):
     """
     Wraps the entire text in <translate> tags if it doesn't already have them,
@@ -102,7 +103,7 @@ def process_table_line(line):
         # For table caption
         return f'{line[:2]}{add_translate_tags(line[2:].strip()) if len(line) > 2 else ""}'
     elif line.startswith("|-"):
-        # Table row separato r
+        # Table row separator
         return line
     elif line.startswith("!"):
         # For table headers, split on ! and !! without breaking words
@@ -162,6 +163,12 @@ def process_div(line):
         return f'{opening_div_tag}{translated_content}{closing_div_tag}'
     return line
 
+def process_header(line):
+    match = header_pattern.match(line)
+    if match:
+        translated_header_text = add_translate_tags(match.group())
+        return translated_header_text
+    return line
 
 
 def process_double_name_space(line):
@@ -263,9 +270,9 @@ def process_double_name_space(line):
                 else:
                     returnline += "|"
                 returnline += "]]"
-            if ":" not in returnline:
-                returnline = returnline[:-2]
-            return returnline
+        if ":" not in returnline:
+            returnline = returnline[:-3]
+        return returnline
 
     # For cases without pipe (just links)
     else:
@@ -304,38 +311,28 @@ def process_lists(line):
     Processes lists (e.g., *, #, :) by adding <translate> tags around list item content.
     Handles nested lists and proper newline formatting.
     """
-    markers = ['*', '#', ':', ';']
-    prefix = ''
-    content_start = 0
-    
-    # Get list markers prefix
-    while content_start < len(line) and line[content_start] in markers:
-        prefix += line[content_start]
-        content_start += 1
-        
-    content = line[content_start:].strip()
-    if not content:
-        return line
+    for i in range(len(line)):
+        if line[i] in ['*', '#', ':', ';']:
+            continue
+        else:
+            words = line[i:].split("<br>") 
+            for j in range(len(words)):
+                if "https://" in words[j]: 
+                    words[j] = f"<translate>{words[j]}</translate>"
+                elif "[[" in words[j]:
+                    words[j] = process_double_name_space(words[j])
+                else: 
+                    worder = words[j].split(":")
+                    for k in range(len(worder)):
+                        if worder[k] == '':
+                            continue
+                        else:
+                            worder[k] = f"<translate>{worder[k]}</translate>"
+                    words[j] = ":".join(worder) 
+                    
+            newstring = "<br>".join(words)
+            return f"{line[:i]}{newstring}"  
 
-    # Check if content ends with a colon
-    has_colon_suffix = content.endswith(':')
-    if has_colon_suffix:
-        content = content[:-1]
-        
-    # Process content based on type
-    if "[[" in content:
-        content = process_double_name_space(content)
-    elif "http" in content:
-        content = process_external_link(content)
-    else:
-        content = f"<translate>{content}</translate>"
-    
-    # Add colon back if it was present
-    if has_colon_suffix:
-        content = f"{content}:"
-    
-    # Add proper formatting with newlines
-    return f"{prefix}{content}\n\n"
 
 def process_doublecurly(line):
     """
@@ -607,7 +604,7 @@ def convert_to_translatable_wikitext(wikitext):
     Converts standard wikitext to translatable wikitext by wrapping text with <translate> tags.
     Handles tables, lists, blockquotes, divs, and ensures tags inside blockquotes are not wrapped.
     """
-    lines = re.split("\n" , wikitext)
+    lines = re.split("\n",wikitext)
     converted_lines = []
     in_syntax_highlight = False
     in_table = False
