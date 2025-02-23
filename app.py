@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, jsonify
 import re
 
 app = Flask(__name__)
@@ -682,6 +682,16 @@ def convert():
     wikitext = request.form.get('wikitext', '')
     converted_text = convert_to_translatable_wikitext(wikitext)
     return render_template('home.html', original=wikitext, converted=converted_text)
+
+@app.route('/api/convert', methods=['POST'])
+def api_convert():
+    data = request.get_json()
+    wikitext = data.get('wikitext', '')
+    converted_text = convert_to_translatable_wikitext(wikitext)
+    return jsonify({
+        'original': wikitext,
+        'converted': converted_text
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
