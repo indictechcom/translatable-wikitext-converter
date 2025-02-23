@@ -56,7 +56,7 @@ def add_translate_tags(text):
     Skips adding <translate> tags if they are already present, even with comments or special content.
     """
     if not text.strip():
-        return text
+        return text.strip()
 
     if re.search(r'<translate>.*<translate>', text):
         return text
@@ -171,12 +171,21 @@ def process_header(line):
     return line
 
 
+
 def process_double_name_space(line):
     """
     Double Name space (e.g., [[link/eg]]) and adds <translate> tags around the eg text.
+    Also handles simple internal links by adding Special:MyLanguage prefix.
     """
     pipestart = False
     returnline = ""
+    
+    # Handle simple [[link]] format
+    if line.startswith('[[') and line.endswith(']]') and '|' not in line:
+        link_text = line[2:-2].strip()
+        if not link_text.startswith(('Category:', 'File:', 'Special:')):
+            return f'[[Special:MyLanguage/{link_text}|<translate>{link_text}</translate>]]'
+    
     if 'Special:MyLanguage/' in line:  
         return line
     if (line.lower().startswith("[[category:".lower())  ):
@@ -286,23 +295,24 @@ def process_double_name_space(line):
                 returnline += line[i]
         return returnline
 
+
 def process_external_link(line):
     """
     Processes external links in the format [http://example.com Description] and ensures
     that only the description part is wrapped in <translate> tags, leaving the URL untouched.
+    Uses tvar for URL handling.
     """
-    match = re.match(r'(\[https?://[^\s]+)\s+([^\]]+)\]', line)
+    match = re.match(r'(\[)(https?://[^\s]+)\s+([^\]]+)\]', line)
 
     if match:
-        url_part = match.group(1)
-        description_part = match.group(2)
-        # Wrap only the description part in <translate> tags, leave the URL untouched
-        return f'{url_part} <translate>{description_part}</translate>]'
+        bracket, url, description = match.groups()
+        return f'[<tvar name="url">{url}</tvar> {description}]'
     return line
 
 def process_lists(line):
     """
     Processes lists (e.g., *, #, :) by adding <translate> tags around list item content.
+    Handles nested lists and proper newline formatting.
     """
     for i in range(len(line)):
         if line[i] in ['*', '#', ':', ';']:
@@ -532,6 +542,16 @@ def process_small_tag(line, in_poem_block=False):
 
 #     # Case 4: No <poem> tag found, return the line as is
 #     return line, in_poem_block
+
+def process_header(line):
+    """Processes section headers and adds translate tags"""
+    match = header_pattern.match(line)
+    if match:
+        equals_start, content, equals_end = match.groups()
+        return f"<translate>{equals_start}{content.strip()}{equals_end}\n\n</translate>"
+    return line
+
+
 def process_code_tag(line):
     """
     Processes <code> and </code> tags and ensures that the content inside the tags is not wrapped in <translate> tags.
@@ -592,6 +612,10 @@ def convert_to_translatable_wikitext(wikitext):
     in_syntax_highlight = False
     in_table = False
     for line in lines:
+        if line and line.startswith('[[Category:'):
+            category_line = process_double_name_space(line)
+            converted_lines.append(f"\n{category_line}\n")
+            continue
         if line is not None:
             line = line.strip()
     
@@ -665,9 +689,9 @@ def convert_to_translatable_wikitext(wikitext):
             else:
                 converted_lines.append(add_translate_tags(line))
         else:
-            converted_lines.append('')
+            continue
         converted_lines = [str(line) if line is not None else "" for line in converted_lines]
-    return '\n'.join(converted_lines)
+    return '\n'.join(converted_lines).strip()
 
 @app.route('/')
 def index():
