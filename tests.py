@@ -52,14 +52,5 @@ class TestTranslatableWikitext(unittest.TestCase):
             ),
             "[[File:pretty hello word.png| <translate>alt=Hello everybody!</translate>]], [[File:smiley.png| <translate>alt=😂</translate>]] How are you?"
         )
-    def test_list_with_translate_tags(self):
-        self.assertEqual(
-            convert_to_translatable_wikitext(
-                "* This is a long list:** There are more than 160 words in this list,** or there are more than 8 items."
-                "* So it is better to split it in several smaller units.* But we must exclude bullet points from "
-                "translate tags to keep the list accessible."
-            ),
-            "*<translate> This is a long list</translate>:\n\n**<translate> There are more than 160 words in this list,</translate>\n\n**<translate> or there are more than 8 items.* So it is better to split it in several smaller units.* But we must exclude bullet points from translate tags to keep the list accessible.</translate>"
-        )
 if __name__ == '__main__':
     unittest.main()

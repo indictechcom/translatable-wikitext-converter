@@ -171,13 +171,24 @@ def process_header(line):
     return line
 
 
+
 def process_double_name_space(line):
     """
     Double Name space (e.g., [[link/eg]]) and adds <translate> tags around the eg text.
+    Also handles simple internal links by adding Special:MyLanguage prefix.
     """
+    pipestart = False
+    returnline = ""
+    
+    # Handle simple [[link]] format
+    if line.startswith('[[') and line.endswith(']]') and '|' not in line:
+        link_text = line[2:-2].strip()
+        if not link_text.startswith(('Category:', 'File:', 'Special:')):
+            return f'[[Special:MyLanguage/{link_text}|<translate>{link_text}</translate>]]'
+    
     if 'Special:MyLanguage/' in line:  
         return line
-    if (line.lower().startswith("[[category:".lower())):
+    if (line.lower().startswith("[[category:".lower())  ):
         y = line.split(']]')[0]
         m = ''
         if (not existing_translation_pattern.search(line)):
@@ -185,30 +196,21 @@ def process_double_name_space(line):
             return y + m
         else:
             return y + ']]' 
-    
-    if '|' not in line and not file_pattern.search(line):
-        if line.startswith('[[Special:'):
-            return line
-        i = 0 
-        while line[i] != ']':
-            i+=1
-        link_target = line[2:i]
-        return f"[[Special:MyLanguage/{link_target}|<translate>{link_target}</translate>]]"
 
     # For File case
+   
     if line[2:6] == "File":
+        print(line + "\n")
         i = 0
-        returnline = ""
         while i < len(line):
             if line[i:i+4] == 'alt=':
-                returnline += "|alt=<translate>"
+                returnline += "alt=<translate>"
                 i += 4
-                while i < len(line) and line[i] != '|' and line[i] != ']':
+                while line[i] != '|' and line[i] != ']':
                     returnline += line[i]
                     i += 1
                 returnline += "</translate>"
-                if i < len(line):
-                    returnline += line[i]
+                returnline += line[i]
             else:
                 if line[i] == '|':
                     if line[i+1] == ' ':
@@ -292,6 +294,7 @@ def process_double_name_space(line):
             else:
                 returnline += line[i]
         return returnline
+
 
 def process_external_link(line):
     """
