@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, jsonify
 import re
 
 app = Flask(__name__)
@@ -706,6 +706,32 @@ def convert():
     wikitext = request.form.get('wikitext', '')
     converted_text = convert_to_translatable_wikitext(wikitext)
     return render_template('home.html', original=wikitext, converted=converted_text)
+
+@app.route('/api/convert', methods=['GET', 'POST'])
+def api_convert():
+    if request.method == 'GET':
+        return """
+        <h1>Translate Tagger API</h1>
+        <p>Send a POST request with JSON data to use this API.</p>
+        <p>Example:</p>
+        <pre>
+        curl -X POST https://translatetagger.toolforge.org/api/convert \\
+        -H "Content-Type: application/json" \\
+        -d '{"wikitext": "This is a test [[link|example]]"}'
+        </pre>
+        """
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'wikitext' not in data:
+            return jsonify({'error': 'Missing "wikitext" in JSON payload'}), 400
+        
+        wikitext = data.get('wikitext', '')
+        converted_text = convert_to_translatable_wikitext(wikitext)
+        
+        return jsonify({
+            'original': wikitext,
+            'converted': converted_text
+        })
 
 if __name__ == '__main__':
     app.run(debug=True)
