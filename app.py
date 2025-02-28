@@ -56,7 +56,7 @@ def add_translate_tags(text):
     Skips adding <translate> tags if they are already present, even with comments or special content.
     """
     if not text.strip():
-        return text.strip()
+        return text
 
     if re.search(r'<translate>.*<translate>', text):
         return text
@@ -171,148 +171,121 @@ def process_header(line):
     return line
 
 
-
 def process_double_name_space(line):
     """
     Double Name space (e.g., [[link/eg]]) and adds <translate> tags around the eg text.
     Also handles simple internal links by adding Special:MyLanguage prefix.
+    Properly handles text that appears after closing brackets by adding translate tags.
+    Does not put translate tags around colons.
     """
-    pipestart = False
-    returnline = ""
-    
-    # Handle simple [[link]] format
-    if line.startswith('[[') and line.endswith(']]') and '|' not in line:
-        link_text = line[2:-2].strip()
-        if not link_text.startswith(('Category:', 'File:', 'Special:')):
-            return f'[[Special:MyLanguage/{link_text}|<translate>{link_text}</translate>]]'
-    
     if 'Special:MyLanguage/' in line:  
         return line
-    if (line.lower().startswith("[[category:".lower())  ):
+    
+    if line.lower().startswith("[[category:"):
         y = line.split(']]')[0]
-        m = ''
-        if (not existing_translation_pattern.search(line)):
-            m = '{{#translation:}}]]'
-            return y + m
+        if not existing_translation_pattern.search(line):
+            return y + '{{#translation:}}]]'
         else:
-            return y + ']]' 
-
-    # For File case
-   
-    if line[2:6] == "File":
-        print(line + "\n")
+            return y + ']]'
+    
+    # Handle File case
+    if len(line) > 6 and line[0:2] == "[[" and line[2:6] == "File":
+        # File processing logic remains the same
+        returnline = ""
         i = 0
         while i < len(line):
             if line[i:i+4] == 'alt=':
                 returnline += "alt=<translate>"
                 i += 4
-                while line[i] != '|' and line[i] != ']':
+                while i < len(line) and line[i] != '|' and line[i] != ']':
                     returnline += line[i]
                     i += 1
                 returnline += "</translate>"
-                returnline += line[i]
+                if i < len(line):
+                    returnline += line[i]
             else:
-                if line[i] == '|':
-                    if line[i+1] == ' ':
-                        if line[i+2:i+4] in ('left'):
+                if i < len(line) and line[i] == '|':
+                    if i+1 < len(line) and line[i+1] == ' ':
+                        if i+3 < len(line) and line[i+2:i+4] in ('left'):
                             returnline += line[i]
-                        elif line[i+2:i+7] in  ('right','center','thumb'):
+                        elif i+6 < len(line) and line[i+2:i+7] in ('right','center','thumb'):
                             returnline += line[i]
                         else:
-                            print(line[i+1:i+7])
                             returnline += "| <translate>"
                             i+=2
-                            while line[i] != '|' and line[i] != ']':
+                            while i < len(line) and line[i] != '|' and line[i] != ']':
                                 returnline += line[i]
                                 i += 1
                             returnline += "</translate>"
-                            returnline += line[i]
+                            if i < len(line):
+                                returnline += line[i]
                     else:
-                        if line[i+1:i+3] in ('left'):
+                        if i+2 < len(line) and line[i+1:i+3] in ('left'):
                             returnline += line[i]
-                        elif line[i+1:i+6] in  ('right','center','thumb'):
+                        elif i+5 < len(line) and line[i+1:i+6] in ('right','center','thumb'):
                             returnline += line[i]
                         else:
-                            print(line[i+1:i+7])
                             returnline += "| <translate>"
                             i+=1
-                            while line[i] != '|' and line[i] != ']':
+                            while i < len(line) and line[i] != '|' and line[i] != ']':
                                 returnline += line[i]
                                 i += 1
                             returnline += "</translate>"
-                            returnline += line[i]
+                            if i < len(line):
+                                returnline += line[i]
                 else:
-                     returnline += line[i]
+                     if i < len(line):
+                         returnline += line[i]
             i += 1
         return returnline
-    print(line)
-    # For normal pipe name spaces
-    if ":" in line[10:] and "Category" not in line[2:]:
-        line1 = line
-    else:
-        line1 = line[2:-2]
-    print("This is a special word " + line[7:])
-    words = re.split(r'\|+|\]\]+', line1)
-    print(words)
-
-    if len(words) > 1:
-        if ":" not in line1:
-            returnline += "[["
-        returnline += words[0] + "|"
-        words = words[1:]
-        print(words)
-        for word in words:
-            if ":"  in word:
-                returnline+=": <translate>" + word[1:] + "</translate>" 
+    link_pattern = r'\[\[(.*?)\]\]'
+    parts = re.split(link_pattern, line)
+    
+    result = ""
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            if part.strip():
+                colon_parts = re.split(r'(:)', part)
+                for j, cp in enumerate(colon_parts):
+                    if cp == ':':  
+                        result += cp
+                    elif cp.strip():  
+                        result += f"<translate>{cp}</translate>"
+                    else:  
+                        result += cp
             else:
-                if word.strip() != "":
-                    returnline += "<translate>"
-                    returnline += word
-                    returnline += "</translate>"
+                result += part
+        else: 
+            if '|' in part:
+                link_target, link_text = part.split('|', 1)
+                if not link_target.startswith(('Category:', 'File:', 'Special:')):
+                    result += f'[[Special:MyLanguage/{link_target}|<translate>{link_text}</translate>]]'
                 else:
-                    returnline += "|"
-                returnline += "]]"
-        if ":" not in returnline:
-            returnline = returnline[:-3]
-        return returnline
-
-    # For cases without pipe (just links)
-    else:
-        for i in range(len(line)):
-            if line[i] == '|' and pipestart is False:
-                pipestart = True
-                returnline += "|<translate>"
-        
-
-            elif pipestart is True and (line[i] == '|' or line[i] == ']'):
-                pipestart = False
-                returnline += "</translate>"
-                returnline += line[i]
-                if line[i] == '|':
-                    returnline += "<translate>"
-                    pipestart = True
+                    result += f'[[{link_target}|<translate>{link_text}</translate>]]'
             else:
-                returnline += line[i]
-        return returnline
-
-
+                if not part.startswith(('Category:', 'File:', 'Special:')):
+                    result += f'[[Special:MyLanguage/{part}|<translate>{part}</translate>]]'
+                else:
+                    result += f'[[{part}]]'
+    
+    return result
 def process_external_link(line):
     """
     Processes external links in the format [http://example.com Description] and ensures
     that only the description part is wrapped in <translate> tags, leaving the URL untouched.
-    Uses tvar for URL handling.
     """
-    match = re.match(r'(\[)(https?://[^\s]+)\s+([^\]]+)\]', line)
+    match = re.match(r'(\[https?://[^\s]+)\s+([^\]]+)\]', line)
 
     if match:
-        bracket, url, description = match.groups()
-        return f'[<tvar name="url">{url}</tvar> {description}]'
+        url_part = match.group(1)
+        description_part = match.group(2)
+        # Wrap only the description part in <translate> tags, leave the URL untouched
+        return f'{url_part} <translate>{description_part}</translate>]'
     return line
 
 def process_lists(line):
     """
     Processes lists (e.g., *, #, :) by adding <translate> tags around list item content.
-    Handles nested lists and proper newline formatting.
     """
     for i in range(len(line)):
         if line[i] in ['*', '#', ':', ';']:
@@ -542,16 +515,6 @@ def process_small_tag(line, in_poem_block=False):
 
 #     # Case 4: No <poem> tag found, return the line as is
 #     return line, in_poem_block
-
-def process_header(line):
-    """Processes section headers and adds translate tags"""
-    match = header_pattern.match(line)
-    if match:
-        equals_start, content, equals_end = match.groups()
-        return f"<translate>{equals_start}{content.strip()}{equals_end}\n\n</translate>"
-    return line
-
-
 def process_code_tag(line):
     """
     Processes <code> and </code> tags and ensures that the content inside the tags is not wrapped in <translate> tags.
@@ -612,10 +575,6 @@ def convert_to_translatable_wikitext(wikitext):
     in_syntax_highlight = False
     in_table = False
     for line in lines:
-        if line and line.startswith('[[Category:'):
-            category_line = process_double_name_space(line)
-            converted_lines.append(f"\n{category_line}\n")
-            continue
         if line is not None:
             line = line.strip()
     
@@ -689,9 +648,9 @@ def convert_to_translatable_wikitext(wikitext):
             else:
                 converted_lines.append(add_translate_tags(line))
         else:
-            continue
+            converted_lines.append('')
         converted_lines = [str(line) if line is not None else "" for line in converted_lines]
-    return '\n'.join(converted_lines).strip()
+    return '\n'.join(converted_lines)
 
 @app.route('/')
 def index():
