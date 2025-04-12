@@ -174,118 +174,101 @@ def process_header(line):
 def process_double_name_space(line):
     """
     Double Name space (e.g., [[link/eg]]) and adds <translate> tags around the eg text.
+    Also handles simple internal links by adding Special:MyLanguage prefix.
+    Properly handles text that appears after closing brackets by adding translate tags.
+    Does not put translate tags around colons.
     """
-    pipestart = False
-    returnline = ""
     if 'Special:MyLanguage/' in line:  
         return line
-    if (line.lower().startswith("[[category:".lower())  ):
+    
+    if line.lower().startswith("[[category:"):
         y = line.split(']]')[0]
-        m = ''
-        if (not existing_translation_pattern.search(line)):
-            m = '{{#translation:}}]]'
-            return y + m
+        if not existing_translation_pattern.search(line):
+            return y + '{{#translation:}}]]'
         else:
-            return y + ']]' 
-
-    # For File case
-   
-    if line[2:6] == "File":
-        print(line + "\n")
+            return y + ']]'
+    
+    # Handle File case
+    if len(line) > 6 and line[0:2] == "[[" and line[2:6] == "File":
+        # File processing logic remains the same
+        returnline = ""
         i = 0
         while i < len(line):
             if line[i:i+4] == 'alt=':
                 returnline += "alt=<translate>"
                 i += 4
-                while line[i] != '|' and line[i] != ']':
+                while i < len(line) and line[i] != '|' and line[i] != ']':
                     returnline += line[i]
                     i += 1
                 returnline += "</translate>"
-                returnline += line[i]
+                if i < len(line):
+                    returnline += line[i]
             else:
-                if line[i] == '|':
-                    if line[i+1] == ' ':
-                        if line[i+2:i+4] in ('left'):
+                if i < len(line) and line[i] == '|':
+                    if i+1 < len(line) and line[i+1] == ' ':
+                        if i+3 < len(line) and line[i+2:i+4] in ('left'):
                             returnline += line[i]
-                        elif line[i+2:i+7] in  ('right','center','thumb'):
+                        elif i+6 < len(line) and line[i+2:i+7] in ('right','center','thumb'):
                             returnline += line[i]
                         else:
-                            print(line[i+1:i+7])
                             returnline += "| <translate>"
                             i+=2
-                            while line[i] != '|' and line[i] != ']':
+                            while i < len(line) and line[i] != '|' and line[i] != ']':
                                 returnline += line[i]
                                 i += 1
                             returnline += "</translate>"
-                            returnline += line[i]
+                            if i < len(line):
+                                returnline += line[i]
                     else:
-                        if line[i+1:i+3] in ('left'):
+                        if i+2 < len(line) and line[i+1:i+3] in ('left'):
                             returnline += line[i]
-                        elif line[i+1:i+6] in  ('right','center','thumb'):
+                        elif i+5 < len(line) and line[i+1:i+6] in ('right','center','thumb'):
                             returnline += line[i]
                         else:
-                            print(line[i+1:i+7])
                             returnline += "| <translate>"
                             i+=1
-                            while line[i] != '|' and line[i] != ']':
+                            while i < len(line) and line[i] != '|' and line[i] != ']':
                                 returnline += line[i]
                                 i += 1
                             returnline += "</translate>"
-                            returnline += line[i]
+                            if i < len(line):
+                                returnline += line[i]
                 else:
-                     returnline += line[i]
+                     if i < len(line):
+                         returnline += line[i]
             i += 1
         return returnline
-    print(line)
-    # For normal pipe name spaces
-    if ":" in line[10:] and "Category" not in line[2:]:
-        line1 = line
-    else:
-        line1 = line[2:-2]
-    print("This is a special word " + line[7:])
-    words = re.split(r'\|+|\]\]+', line1)
-    print(words)
-
-    if len(words) > 1:
-        if ":" not in line1:
-            returnline += "[["
-        returnline += words[0] + "|"
-        words = words[1:]
-        print(words)
-        for word in words:
-            if ":"  in word:
-                returnline+=": <translate>" + word[1:] + "</translate>" 
+    link_pattern = r'\[\[(.*?)\]\]'
+    parts = re.split(link_pattern, line)
+    
+    result = ""
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            if part.strip():
+                colon_parts = re.split(r'(:)', part)
+                for j, cp in enumerate(colon_parts):
+                    if cp == ':':  
+                        result += cp
+                    elif cp.strip():  
+                        result += f"<translate>{cp}</translate>"
+                    else:  
+                        result += cp
             else:
-                if word.strip() != "":
-                    returnline += "<translate>"
-                    returnline += word
-                    returnline += "</translate>"
+                result += part
+        else: 
+            if '|' in part:
+                link_target, link_text = part.split('|', 1)
+                if not link_target.startswith(('Category:', 'File:', 'Special:')):
+                    result += f'[[Special:MyLanguage/{link_target}|<translate>{link_text}</translate>]]'
                 else:
-                    returnline += "|"
-                returnline += "]]"
-        if ":" not in returnline:
-            returnline = returnline[:-3]
-        return returnline
-
-    # For cases without pipe (just links)
-    else:
-        for i in range(len(line)):
-            if line[i] == '|' and pipestart is False:
-                pipestart = True
-                returnline += "|<translate>"
-        
-
-            elif pipestart is True and (line[i] == '|' or line[i] == ']'):
-                pipestart = False
-                returnline += "</translate>"
-                returnline += line[i]
-                if line[i] == '|':
-                    returnline += "<translate>"
-                    pipestart = True
+                    result += f'[[{link_target}|<translate>{link_text}</translate>]]'
             else:
-                returnline += line[i]
-        return returnline
-
+                if not part.startswith(('Category:', 'File:', 'Special:')):
+                    result += f'[[Special:MyLanguage/{part}|<translate>{part}</translate>]]'
+                else:
+                    result += f'[[{part}]]'
+    
+    return result
 def process_external_link(line):
     """
     Processes external links in the format [http://example.com Description] and ensures
