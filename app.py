@@ -1,7 +1,11 @@
 from flask import Flask, request, render_template, jsonify
+from flask_cors import CORS  # Import flask-cors
 import re
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+# Alternatively, to restrict origins:
+# CORS(app, resources={r"/api/*": {"origins": "https://meta.wikimedia.org"}})
 
 # Regex to check if a line already has <translate> tags
 # Updated regex to detect any presence of <translate> tags (including comments and spaces)
