@@ -25,8 +25,8 @@ jobs:
           script_stop: true
           script: |
             become translatetagger git -C '$HOME/www/python/src' fetch origin
-            become translatetagger git -C '$HOME/www/python/src' reset --hard origin/stable
-            become translatetagger git -C '$HOME/www/python/src' pull origin stable
+            become translatetagger git -C '$HOME/www/python/src' reset --hard origin/main
+            become translatetagger git -C '$HOME/www/python/src' pull origin main
             become translatetagger webservice python3.11 shell -- webservice-python-bootstrap
             become translatetagger webservice python3.11 restart
             become translatetagger webservice python3.11 status
