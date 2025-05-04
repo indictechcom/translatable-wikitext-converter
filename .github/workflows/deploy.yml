@@ -27,7 +27,6 @@ jobs:
             become translatetagger
             cd $HOME/www/python/src
             git pull
-            toolforge webservice python3.11 shell
             source $HOME/www/python/venv/bin/activate
             pip install -r $HOME/www/python/src/requirements.txt
             toolforge webservice python3.11 restart
