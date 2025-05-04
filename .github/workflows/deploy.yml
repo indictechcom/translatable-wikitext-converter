@@ -25,6 +25,7 @@ jobs:
           script_stop: true
           script: |
             become translatetagger
+            echo "HELLO" > hello.txt
             cd $HOME/www/python/src
             git pull
             source $HOME/www/python/venv/bin/activate
