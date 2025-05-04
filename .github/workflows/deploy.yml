@@ -24,10 +24,9 @@ jobs:
           request_pty: true
           script_stop: true
           script: |
-            become translatetagger
-            echo "HELLO" > hello.txt
-            cd $HOME/www/python/src
-            git pull
-            source $HOME/www/python/venv/bin/activate
-            pip install -r $HOME/www/python/src/requirements.txt
-            toolforge webservice python3.11 restart
+            become translatetagger git -C '$HOME/www/python/src' fetch origin
+            become translatetagger git -C '$HOME/www/python/src' reset --hard origin/stable
+            become translatetagger git -C '$HOME/www/python/src' pull origin stable
+            become translatetagger webservice python3.11 shell -- webservice-python-bootstrap
+            become translatetagger webservice python3.11 restart
+            become translatetagger webservice python3.11 status
