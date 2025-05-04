@@ -1,0 +1,33 @@
+name: Deploy via SSH
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to SSH Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run deployment script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: login.toolforge.org
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          request_pty: true
+          script_stop: true
+          script: |
+            become translatetagger
+            cd $HOME/www/python/src
+            git pull
+            toolforge webservice python3.11 shell
+            source $HOME/www/python/venv/bin/activate
+            pip install -r $HOME/www/python/src/requirements.txt
+            toolforge webservice python3.11 restart
