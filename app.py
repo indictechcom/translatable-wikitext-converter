@@ -229,8 +229,13 @@ def _process_file(s) :
     NON_TRANSLATABLE_KEYWORDS_PREFIXES = {
         'link=', 'upright='
     }
+    file_aliases = ['File:', 'file:', 'Image:', 'image:']
 
     output_parts = []
+    tokens = []
+    
+    inner_content = s[2:-2]  # Remove the leading [[ and trailing ]]
+    tokens = inner_content.split('|')
     
     # The first token shall start with a file alias
     # e.g., "File:Example.jpg" or "Image:Example.png"
