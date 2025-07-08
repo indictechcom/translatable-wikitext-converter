@@ -15,10 +15,30 @@ def _wrap_in_translate(text):
     """
     Wraps the given text with <translate> tags.
     It ensures that empty or whitespace-only strings are not wrapped.
+    The <translate> tags are added around the non-whitespace content,
+    preserving leading and trailing whitespace.
     """
     if not text or not text.strip():
         return text
-    return f"<translate>{text}</translate>"
+
+    # Find the first and last non-whitespace characters
+    first_char_index = -1
+    last_char_index = -1
+    for i, char in enumerate(text):
+        if char not in (' ', '\n', '\t', '\r', '\f', '\v'): # Check for common whitespace characters
+            if first_char_index == -1:
+                first_char_index = i
+            last_char_index = i
+
+    # If no non-whitespace characters are found (should be caught by text.strip() check, but for robustness)
+    if first_char_index == -1:
+        return text
+
+    leading_whitespace = text[:first_char_index]
+    content = text[first_char_index : last_char_index + 1]
+    trailing_whitespace = text[last_char_index + 1 :]
+
+    return f"{leading_whitespace}<translate>{content}</translate>{trailing_whitespace}"
 
 def process_syntax_highlight(text):
     """
@@ -89,7 +109,7 @@ def process_poem_tag(text):
 def process_code_tag(text, tvar_code_id):
     """
     Processes <code> tags in the wikitext.
-    It wraps the content in the <tvar> tag.
+    It wraps the content in <translate> tags.
     """
     assert(text.startswith('<code') and text.endswith('</code>')), "Invalid code tag"
     # Get inside the <code> tag
@@ -287,7 +307,7 @@ def _process_file(s) :
 def process_internal_link(text, tvar_id):
     """
     Processes internal links in the wikitext.
-    It wraps the content in <tvar> tags.
+    It wraps the content in <translate> tags.
     """
     assert (text.startswith("[[") and text.endswith("]]")), "Input must be a valid wiki link format [[...]]"
     # Split the link into parts, handling both internal links and links with display text
@@ -322,7 +342,7 @@ def process_internal_link(text, tvar_id):
 def process_external_link(text, tvar_url_id):
     """
     Processes external links in the format [http://example.com Description] and ensures
-    that the URL part is wrapped in <tvar> tags.
+    that only the description part is wrapped in <translate> tags, leaving the URL untouched.
     """
     match = re.match(r'\[(https?://[^\s]+)\s+([^\]]+)\]', text)
 
