@@ -89,7 +89,7 @@ def process_poem_tag(text):
 def process_code_tag(text, tvar_code_id):
     """
     Processes <code> tags in the wikitext.
-    It wraps the content in <translate> tags.
+    It wraps the content in the <tvar> tag.
     """
     assert(text.startswith('<code') and text.endswith('</code>')), "Invalid code tag"
     # Get inside the <code> tag
@@ -287,7 +287,7 @@ def _process_file(s) :
 def process_internal_link(text, tvar_id):
     """
     Processes internal links in the wikitext.
-    It wraps the content in <translate> tags.
+    It wraps the content in <tvar> tags.
     """
     assert (text.startswith("[[") and text.endswith("]]")), "Input must be a valid wiki link format [[...]]"
     # Split the link into parts, handling both internal links and links with display text
@@ -322,7 +322,7 @@ def process_internal_link(text, tvar_id):
 def process_external_link(text, tvar_url_id):
     """
     Processes external links in the format [http://example.com Description] and ensures
-    that only the description part is wrapped in <translate> tags, leaving the URL untouched.
+    that the URL part is wrapped in <tvar> tags.
     """
     match = re.match(r'\[(https?://[^\s]+)\s+([^\]]+)\]', text)
 
