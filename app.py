@@ -86,13 +86,25 @@ def process_poem_tag(text):
     wrapped_content = _wrap_in_translate(content)
     return f"{prefix}{wrapped_content}{suffix}"
 
-def process_code_tag(text):
+def process_code_tag(text, tvar_code_id):
     """
     Processes <code> tags in the wikitext.
     It wraps the content in <translate> tags.
     """
     assert(text.startswith('<code') and text.endswith('</code>')), "Invalid code tag"
-    return text
+    # Get inside the <code> tag
+    start_tag_end = text.find('>') + 1
+    end_tag_start = text.rfind('<')
+    if start_tag_end >= end_tag_start:
+        return text 
+    prefix = text[:start_tag_end]
+    content = text[start_tag_end:end_tag_start].strip()
+    suffix = text[end_tag_start:]
+    if not content:
+        return text
+    # Wrap the content in <translate> tags
+    wrapped_content = f'<tvar name=code{tvar_code_id}>{content}</tvar>'
+    return f"{prefix}{wrapped_content}{suffix}"
 
 def process_div(text):
     """
@@ -587,20 +599,26 @@ def convert_to_translatable_wikitext(wikitext):
     # Process links
     tvar_id = 0
     tvar_url_id = 0
+    tvar_code_id = 0
     for i, (part, handler) in enumerate(parts):
         # Handlers for links require a tvar_id
         if handler == process_internal_link:
             new_part = handler(part, tvar_id)
-            new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate for consistency
+            new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
             parts[i] = (new_part, new_handler)
             tvar_id += 1
         elif handler == process_external_link:
             new_part = handler(part, tvar_url_id)
-            new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate for consistency
+            new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
             parts[i] = (new_part, new_handler)
             tvar_url_id += 1
+        elif handler == process_code_tag:
+            new_part = handler(part, tvar_code_id)
+            new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
+            parts[i] = (new_part, new_handler)
+            tvar_code_id += 1
             
-    # Scan again the parts: merge consecutive parts that have the same handler, but only if the handler is _wrap_in_translate
+    # Scan again the parts: merge consecutive parts handled by _wrap_in_translate
     _parts = []
     if parts:
         current_part, current_handler = parts[0]
@@ -609,7 +627,6 @@ def convert_to_translatable_wikitext(wikitext):
                 # Merge the parts
                 current_part += part
             else:
-                # Add the current part to the list and start a new one
                 _parts.append((current_part, current_handler))
                 current_part, current_handler = part, handler
         # Add the last accumulated part
