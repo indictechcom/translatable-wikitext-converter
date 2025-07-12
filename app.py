@@ -1,9 +1,13 @@
 from flask import Flask, request, render_template, jsonify
 from flask_cors import CORS  # Import flask-cors
 import re
+from enum import Enum
+import sys
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+behaviour_switches = ['__NOTOC__', '__FORCETOC__', '__TOC__', '__NOEDITSECTION__', '__NEWSECTIONLINK__', '__NONEWSECTIONLINK__', '__NOGALLERY__', '__HIDDENCAT__', '__EXPECTUNUSEDCATEGORY__', '__NOCONTENTCONVERT__', '__NOCC__', '__NOTITLECONVERT__', '__NOTC__', '__START__', '__END__', '__INDEX__', '__NOINDEX__', '__STATICREDIRECT__', '__EXPECTUNUSEDTEMPLATE__', '__NOGLOBAL__', '__DISAMBIG__', '__EXPECTED_UNCONNECTED_PAGE__', '__ARCHIVEDTALK__', '__NOTALK__', '__EXPECTWITHOUTSCANS__']
 
 # --- Helper Functions for Processing Different Wikitext Elements ---
 # These functions are designed to handle specific wikitext structures.
@@ -106,7 +110,7 @@ def process_poem_tag(text):
     wrapped_content = _wrap_in_translate(content)
     return f"{prefix}{wrapped_content}{suffix}"
 
-def process_code_tag(text, tvar_code_id):
+def process_code_tag(text, tvar_code_id=0):
     """
     Processes <code> tags in the wikitext.
     It wraps the content in <translate> tags.
@@ -252,43 +256,106 @@ def process_item(text):
         return text
     return f"{text[:offset]} <translate>{item_content}</translate>\n"
 
-def _process_file(s) :
+def is_emoji_unicode(char):
+    # This is a very simplified set of common emoji ranges.
+    # A comprehensive list would be much longer and more complex.
+    # See https://www.unicode.org/Public/emoji/ for full details.
+    if 0x1F600 <= ord(char) <= 0x1F64F:  # Emoticons
+        return True
+    if 0x1F300 <= ord(char) <= 0x1F5FF:  # Miscellaneous Symbols and Pictographs
+        return True
+    if 0x1F680 <= ord(char) <= 0x1F6FF:  # Transport and Map Symbols
+        return True
+    if 0x2600 <= ord(char) <= 0x26FF:    # Miscellaneous Symbols
+        return True
+    if 0x2700 <= ord(char) <= 0x27BF:    # Dingbats
+        return True
+    # Add more ranges as needed for full coverage
+    return False
+
+class double_brackets_types(Enum):
+    wikilink = 1
+    category = 2
+    inline_icon = 3
+    not_inline_icon_file = 4
+    special = 5
+    invalid_file = 6
+
+def _process_file(s, tvar_inline_icon_id=0): 
     # Define keywords that should NOT be translated when found as parameters
     NON_TRANSLATABLE_KEYWORDS = {
-        'left', 'right', 'centre', 'center', 'thumb', 'frameless', 'border', 
-        'upright', 'baseline', 'middle', 'sub', 'super', 'text-top', 'text-bottom'
+        'left', 'right', 'centre', 'center', 'thumb', 'frameless', 'border', 'none', 
+        'upright', 'baseline', 'middle', 'sub', 'super', 'text-top', 'text-bottom', '{{dirstart}}', '{{dirend}}'
     }
     NON_TRANSLATABLE_KEYWORDS_PREFIXES = {
         'link=', 'upright='
     }
+    NOT_INLINE_KEYWORDS = {
+        'left', 'right', 'centre', 'center', 'thumb', 'frameless', 'border', 'none', '{{dirstart}}', '{{dirend}}'
+    }
     file_aliases = ['File:', 'file:', 'Image:', 'image:']
 
-    output_parts = []
     tokens = []
     
     inner_content = s[2:-2]  # Remove the leading [[ and trailing ]]
     tokens = inner_content.split('|')
+    tokens = [token.strip() for token in tokens]  # Clean up whitespace around tokens
     
     # The first token shall start with a file alias
     # e.g., "File:Example.jpg" or "Image:Example.png"
     if not tokens or not tokens[0].startswith(tuple(file_aliases)):
-        return line
+        return line, double_brackets_types.invalid_file
     
-    # Extract the file name
+    # The first token is a file link
     filename = tokens[0].split(':', 1)[1] if ':' in tokens[0] else tokens[0]
+    tokens[0] = f'File:{filename}' 
+    
+    # Substitute 'left' with {{dirstart}}
+    while 'left' in tokens:
+        tokens[tokens.index('left')] = '{{dirstart}}'
+    # Substitute 'right' with {{dirend}}
+    while 'right' in tokens:
+        tokens[tokens.index('right')] = '{{dirend}}'
+    
+    ############################
+    # Managing inline icons
+    #############################
+    is_inline_icon = True
+    for token in tokens:
+        if token in NOT_INLINE_KEYWORDS:
+            is_inline_icon = False
+            break
+    if is_inline_icon :
+        # Check if it contains 'alt=' followed by an emoji
+        for token in tokens:
+            if token.startswith('alt='):
+                alt_text = token[len('alt='):].strip()
+                if not any(is_emoji_unicode(char) for char in alt_text):
+                    is_inline_icon = False
+                    break
+    if is_inline_icon:
+        # return something like: <tvar name="icon">[[File:smiley.png|alt=🙂]]</tvar>
+        returnline = f'<tvar name=icon{tvar_inline_icon_id}>[[' + '|'.join(tokens) + ']]</tvar>'
+        return returnline, double_brackets_types.inline_icon
+    
+    ############################
+    # Managing general files
+    #############################
+    
+    output_parts = []
     
     # The first token is the file name (e.g., "File:Example.jpg")
     # We substitute any occurrences of "Image:" with "File:"
-    output_parts.append(f'File:{filename}')
+    output_parts.append(tokens[0])
 
     pixel_regex = re.compile(r'\d+(?:x\d+)?px')  # Matches pixel values like "100px" or "100x50px)"
     for token in tokens[1:]:
         # Check for 'alt='
         if token.startswith('alt='):
             alt_text = token[len('alt='):].strip()
-            output_parts.append(f'alt=<translate>{alt_text}</translate>')
+            output_parts.append('alt='+_wrap_in_translate(alt_text))
         # Check if the token is a known non-translatable keyword
-        elif token.lower() in NON_TRANSLATABLE_KEYWORDS:
+        elif token in NON_TRANSLATABLE_KEYWORDS:
             output_parts.append(token)
         # If the token starts with a known non-translatable prefix, keep it as is
         elif any(token.startswith(prefix) for prefix in NON_TRANSLATABLE_KEYWORDS_PREFIXES):
@@ -302,14 +369,16 @@ def _process_file(s) :
 
     # Reconstruct the line with the transformed parts
     returnline = '[[' + '|'.join(output_parts) + ']]' 
-    return returnline
+    return returnline, double_brackets_types.not_inline_icon_file
     
-def process_internal_link(text, tvar_id):
+def process_double_brackets(text, tvar_id=0):
     """
     Processes internal links in the wikitext.
     It wraps the content in <translate> tags.
     """
-    assert (text.startswith("[[") and text.endswith("]]")), "Input must be a valid wiki link format [[...]]"
+    if not (text.startswith("[[") and text.endswith("]]")) :
+        print(f"Input >{text}< must be wrapped in double brackets [[ ]]")
+        sys.exit(1)
     # Split the link into parts, handling both internal links and links with display text
     
     inner_wl = text[2:-2]  # Remove the leading [[ and trailing ]]
@@ -324,22 +393,22 @@ def process_internal_link(text, tvar_id):
     if parts[0].startswith(tuple(category_aliases)):
         # Handle category links
         cat_name = parts[0].split(':', 1)[1] if ':' in parts[0] else parts[0]
-        return f'[[Category:{cat_name}{{{{#translation:}}}}]]'
+        return f'[[Category:{cat_name}{{{{#translation:}}}}]]', double_brackets_types.category
     elif parts[0].startswith(tuple(file_aliases)):
         # Handle file links
         return _process_file(text)
     elif parts[0].startswith('Special:'):
         # Handle special pages
-        return f'[[{parts[0]}]]'
+        return f'[[{parts[0]}]]', double_brackets_types.special
     
     # Assuming it's a regular internal link
     if len(parts) == 1:
-        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{parts[0].capitalize()}|{parts[0]}]]'
+        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{parts[0].capitalize()}|{parts[0]}]]', double_brackets_types.wikilink
     if len(parts) == 2 :
-        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{parts[0].capitalize()}|{parts[1]}]]'
+        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{parts[0].capitalize()}|{parts[1]}]]', double_brackets_types.wikilink
     return text
 
-def process_external_link(text, tvar_url_id):
+def process_external_link(text, tvar_url_id=0):
     """
     Processes external links in the format [http://example.com Description] and ensures
     that only the description part is wrapped in <translate> tags, leaving the URL untouched.
@@ -381,7 +450,7 @@ def process_raw_url(text):
     return f"<translate>{text.strip()}</translate>"
 
 
-# --- Main Tokenization Logic ---
+# --- Main Tokenisation Logic ---
 
 def convert_to_translatable_wikitext(wikitext):
     """
@@ -399,6 +468,7 @@ def convert_to_translatable_wikitext(wikitext):
     text_length = len(wikitext)
 
     while curr < text_length :
+        found = None
         # Syntax highlight block
         pattern = '<syntaxhighlight'
         if wikitext.startswith(pattern, curr):
@@ -519,6 +589,20 @@ def convert_to_translatable_wikitext(wikitext):
             curr = end_pattern
             last = curr
             continue
+        # br tag
+        patterns = ['<br>', '<br/>', '<br />']
+        for p in patterns:
+            if wikitext.startswith(p, curr):
+                end_pattern = curr + len(p)
+                if last < curr:
+                    parts.append((wikitext[last:curr], _wrap_in_translate))
+                parts.append((wikitext[curr:end_pattern], lambda x: x))
+                curr = end_pattern
+                last = curr
+                found = True
+                break
+        if found:
+            continue
         # Lists
         patterns_newline = ['\n*', '\n#', '\n:', '\n;']
         if any(wikitext.startswith(p, curr) for p in patterns_newline) :
@@ -554,7 +638,7 @@ def convert_to_translatable_wikitext(wikitext):
             if last < curr:
                 parts.append((wikitext[last:curr], _wrap_in_translate))
             if end_pos > curr + 2:  # Ensure we have a valid link
-                parts.append((wikitext[curr:end_pos], process_internal_link))
+                parts.append((wikitext[curr:end_pos], process_double_brackets))
             curr = end_pos
             last = curr
             continue
@@ -599,6 +683,16 @@ def convert_to_translatable_wikitext(wikitext):
             curr = end_pos
             last = curr
             continue
+        # Behaviour switches
+        for switch in behaviour_switches:
+            if wikitext.startswith(switch, curr):
+                end_pos = curr + len(switch)
+                if last < curr:
+                    parts.append((wikitext[last:curr], _wrap_in_translate))
+                parts.append((wikitext[curr:end_pos], lambda x: x))
+                curr = end_pos
+                last = curr
+                
         
         curr += 1  # Move to the next character if no pattern matched
         
@@ -606,7 +700,7 @@ def convert_to_translatable_wikitext(wikitext):
     if last < text_length:
         parts.append((wikitext[last:], _wrap_in_translate))
     
-    """
+    
     print ('*' * 20)
     for i, (part, handler) in enumerate(parts):
         print(f"--- Start element {i} with handler {handler.__name__} ---")
@@ -614,17 +708,21 @@ def convert_to_translatable_wikitext(wikitext):
         print(f"---\n") 
         
     print ('*' * 20)
-    """
+    
     
     # Process links
     tvar_id = 0
     tvar_url_id = 0
     tvar_code_id = 0
+    tvar_inline_icon_id = 0
     for i, (part, handler) in enumerate(parts):
         # Handlers for links require a tvar_id
-        if handler == process_internal_link:
-            new_part = handler(part, tvar_id)
-            new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
+        if handler == process_double_brackets:
+            new_part, double_brackets_type = handler(part, tvar_id)
+            if double_brackets_type in [double_brackets_types.wikilink, double_brackets_types.special, double_brackets_types.inline_icon]:
+                new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
+            else :
+                new_handler = lambda x: x  # No further processing for categories and files
             parts[i] = (new_part, new_handler)
             tvar_id += 1
         elif handler == process_external_link:
@@ -637,6 +735,13 @@ def convert_to_translatable_wikitext(wikitext):
             new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
             parts[i] = (new_part, new_handler)
             tvar_code_id += 1
+        elif handler == process_double_brackets :
+            new_part, double_brackets_type = handler(part, tvar_inline_icon_id)
+            if double_brackets_type == double_brackets_types.inline_icon:
+                new_handler = _wrap_in_translate  # Change handler to _wrap_in_translate
+                tvar_inline_icon_id += 1
+            else:
+                new_handler = lambda x: x
             
     # Scan again the parts: merge consecutive parts handled by _wrap_in_translate
     _parts = []
