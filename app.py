@@ -15,6 +15,15 @@ behaviour_switches = ['__NOTOC__', '__FORCETOC__', '__TOC__', '__NOEDITSECTION__
 # function to process their internal content, ensuring nested elements
 # are also handled correctly.
 
+def capitalise_first_letter(text):
+    """
+    Capitalises the first letter of the given text.
+    If the text is empty or consists only of whitespace, it returns the text unchanged.
+    """
+    if not text or not text.strip():
+        return text
+    return text[0].upper() + text[1:]
+
 def _wrap_in_translate(text):
     """
     Wraps the given text with <translate> tags.
@@ -254,7 +263,7 @@ def process_item(text):
     item_content = text[offset:].strip()
     if not item_content:
         return text
-    return f"{text[:offset]} <translate>{item_content}</translate>\n"
+    return text[:offset] + ' ' + _wrap_in_translate(item_content) + '\n'
 
 def is_emoji_unicode(char):
     # This is a very simplified set of common emoji ranges.
@@ -288,7 +297,7 @@ def _process_file(s, tvar_inline_icon_id=0):
         'upright', 'baseline', 'middle', 'sub', 'super', 'text-top', 'text-bottom', '{{dirstart}}', '{{dirend}}'
     }
     NON_TRANSLATABLE_KEYWORDS_PREFIXES = {
-        'link=', 'upright='
+        'link=', 'upright=', 'alt='
     }
     NOT_INLINE_KEYWORDS = {
         'left', 'right', 'centre', 'center', 'thumb', 'frameless', 'border', 'none', '{{dirstart}}', '{{dirend}}'
@@ -327,12 +336,19 @@ def _process_file(s, tvar_inline_icon_id=0):
             break
     if is_inline_icon :
         # Check if it contains 'alt=' followed by an emoji
-        for token in tokens:
+        for token in tokens[1:]:
             if token.startswith('alt='):
                 alt_text = token[len('alt='):].strip()
                 if not any(is_emoji_unicode(char) for char in alt_text):
                     is_inline_icon = False
                     break
+            elif token not in NON_TRANSLATABLE_KEYWORDS:
+                is_inline_icon = False
+                break
+            elif any(token.startswith(prefix) for prefix in NON_TRANSLATABLE_KEYWORDS_PREFIXES):
+                is_inline_icon = False
+                break
+        
     if is_inline_icon:
         # return something like: <tvar name="icon">[[File:smiley.png|alt=🙂]]</tvar>
         returnline = f'<tvar name=icon{tvar_inline_icon_id}>[[' + '|'.join(tokens) + ']]</tvar>'
@@ -403,9 +419,9 @@ def process_double_brackets(text, tvar_id=0):
     
     # Assuming it's a regular internal link
     if len(parts) == 1:
-        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{parts[0].capitalize()}|{parts[0]}]]', double_brackets_types.wikilink
+        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{capitalise_first_letter(parts[0])}|{parts[0]}]]', double_brackets_types.wikilink
     if len(parts) == 2 :
-        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{parts[0].capitalize()}|{parts[1]}]]', double_brackets_types.wikilink
+        return f'[[<tvar name={tvar_id}>Special:MyLanguage</tvar>/{capitalise_first_letter(parts[0])}|{parts[1]}]]', double_brackets_types.wikilink
     return text
 
 def process_external_link(text, tvar_url_id=0):
@@ -429,14 +445,15 @@ def process_template(text):
     """
     assert(text.startswith('{{') and text.endswith('}}')), "Invalid template tag"
     # Split the template content from the rest of the text
-    inner_content = text[2:-2]  # Remove the leading {{ and trailing }}
+    inner_content = text[2:-2].strip()  # Remove the leading {{ and trailing }}
+    inner_content = capitalise_first_letter(inner_content)  # Capitalise the first letter of the inner content
     
     # If the inner content is empty, return an empty string
-    if not inner_content.strip():
+    if not inner_content :
         return text
     
     # Wrap the inner content in <translate> tags
-    return f'{{{{<translate>{inner_content}</translate>}}}}'
+    return '{{' + inner_content + '}}'
 
 def process_raw_url(text):
     """
@@ -447,7 +464,7 @@ def process_raw_url(text):
     # and wraps it in <translate> tags.
     if not text.strip():
         return text
-    return f"<translate>{text.strip()}</translate>"
+    return text.strip()
 
 
 # --- Main Tokenisation Logic ---
@@ -461,6 +478,9 @@ def convert_to_translatable_wikitext(wikitext):
     """
     if not wikitext:
         return ""
+    
+    # add an extra newline at the beginning, useful to process items at the beginning of the text
+    wikitext = '\n' + wikitext
 
     parts = []
     last = 0
@@ -772,7 +792,7 @@ def convert_to_translatable_wikitext(wikitext):
     """
     
     # Join the processed parts into a single string
-    return ''.join(processed_parts)
+    return ''.join(processed_parts)[1:]  # Remove the leading newline added at the beginning
 
 @app.route('/')
 def index():
