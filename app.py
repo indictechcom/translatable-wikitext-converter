@@ -24,6 +24,23 @@ def capitalise_first_letter(text):
         return text
     return text[0].upper() + text[1:]
 
+def is_emoji_unicode(char):
+    # This is a very simplified set of common emoji ranges.
+    # A comprehensive list would be much longer and more complex.
+    # See https://www.unicode.org/Public/emoji/ for full details.
+    if 0x1F600 <= ord(char) <= 0x1F64F:  # Emoticons
+        return True
+    if 0x1F300 <= ord(char) <= 0x1F5FF:  # Miscellaneous Symbols and Pictographs
+        return True
+    if 0x1F680 <= ord(char) <= 0x1F6FF:  # Transport and Map Symbols
+        return True
+    if 0x2600 <= ord(char) <= 0x26FF:    # Miscellaneous Symbols
+        return True
+    if 0x2700 <= ord(char) <= 0x27BF:    # Dingbats
+        return True
+    # Add more ranges as needed for full coverage
+    return False
+
 def _wrap_in_translate(text):
     """
     Wraps the given text with <translate> tags.
@@ -264,23 +281,6 @@ def process_item(text):
     if not item_content:
         return text
     return text[:offset] + ' ' + _wrap_in_translate(item_content) + '\n'
-
-def is_emoji_unicode(char):
-    # This is a very simplified set of common emoji ranges.
-    # A comprehensive list would be much longer and more complex.
-    # See https://www.unicode.org/Public/emoji/ for full details.
-    if 0x1F600 <= ord(char) <= 0x1F64F:  # Emoticons
-        return True
-    if 0x1F300 <= ord(char) <= 0x1F5FF:  # Miscellaneous Symbols and Pictographs
-        return True
-    if 0x1F680 <= ord(char) <= 0x1F6FF:  # Transport and Map Symbols
-        return True
-    if 0x2600 <= ord(char) <= 0x26FF:    # Miscellaneous Symbols
-        return True
-    if 0x2700 <= ord(char) <= 0x27BF:    # Dingbats
-        return True
-    # Add more ranges as needed for full coverage
-    return False
 
 class double_brackets_types(Enum):
     wikilink = 1
@@ -720,7 +720,7 @@ def convert_to_translatable_wikitext(wikitext):
     if last < text_length:
         parts.append((wikitext[last:], _wrap_in_translate))
     
-    
+    """
     print ('*' * 20)
     for i, (part, handler) in enumerate(parts):
         print(f"--- Start element {i} with handler {handler.__name__} ---")
@@ -728,7 +728,7 @@ def convert_to_translatable_wikitext(wikitext):
         print(f"---\n") 
         
     print ('*' * 20)
-    
+    """
     
     # Process links
     tvar_id = 0
